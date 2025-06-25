@@ -608,7 +608,7 @@ We welcome contributions! Here's how to get started:
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 📞 **Support**
+##  **Support**
 
 For issues and questions:
 - 📖 Check the [MCP documentation](https://modelcontextprotocol.io/)
@@ -616,15 +616,11 @@ For issues and questions:
 - 🐛 [Open an issue](https://github.com/santhoshravindran7/Fabric-Analytics-MCP/issues) in this repository
 - 💬 Join the community discussions
 
-## 🏆 **Acknowledgments**
+##  **Acknowledgments**
 
 - **Microsoft Fabric Analytics team** for the comprehensive data platform and analytics capabilities
 - **Microsoft Fabric Platform teams** for the robust API platform and infrastructure
 - **Bogdan Crivat** and **Chris Finlan** for the inspiring brainstorming conversation that gave me the idea to open-source this project
 - **Anthropic** for the Model Context Protocol specification
 
-*This project began as my weekend hack project exploring AI integration with Microsoft Fabric. During a casual conversation with Chris and Bogdan about making AI tooling more accessible, they encouraged me to open-source it for the community. What started as a personal experiment is now available for everyone to build upon.*
-
----
-
-**Note**: This MCP server includes production-ready Microsoft Fabric Livy API integration alongside demonstration features for other Fabric APIs. The Livy functionality is fully implemented with comprehensive error handling, authentication support, and real-time capabilities.
+*This project began as my weekend hack project exploring AI integration with Microsoft Fabric. During a casual conversation with Chris and Bogdan about making AI tooling more accessible. What started as a personal experiment over a weekend is now available for everyone to build upon.*
