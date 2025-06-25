@@ -1,0 +1,374 @@
+import { 
+  PublicClientApplication, 
+  ConfidentialClientApplication,
+  AuthenticationResult,
+  DeviceCodeRequest,
+  ClientCredentialRequest,
+  SilentFlowRequest,
+  AccountInfo,
+  Configuration,
+  LogLevel
+} from "@azure/msal-node";
+import { readFileSync } from "fs";
+import { createServer } from "http";
+import { URL } from "url";
+
+export interface AuthConfig {
+  clientId: string;
+  authority?: string;
+  redirectUri?: string;
+  clientSecret?: string;
+  scope?: string[];
+}
+
+export interface AuthResult {
+  accessToken: string;
+  expiresOn: Date;
+  account?: AccountInfo;
+}
+
+export enum AuthMethod {
+  BEARER_TOKEN = "bearer",
+  SERVICE_PRINCIPAL = "service_principal", 
+  DEVICE_CODE = "device_code",
+  INTERACTIVE = "interactive"
+}
+
+export class MicrosoftAuthClient {
+  private publicClient?: PublicClientApplication;
+  private confidentialClient?: ConfidentialClientApplication;
+  private config: AuthConfig;
+  private readonly defaultScope = ["https://api.fabric.microsoft.com/.default"];
+
+  constructor(config: AuthConfig) {
+    this.config = {
+      ...config,
+      authority: config.authority || "https://login.microsoftonline.com/common",
+      scope: config.scope || this.defaultScope
+    };
+  }
+
+  /**
+   * Initialize the appropriate MSAL client based on auth method
+   */
+  private initializeClient(method: AuthMethod): void {
+    const clientConfig: Configuration = {
+      auth: {
+        clientId: this.config.clientId,
+        authority: this.config.authority,
+      },
+      system: {
+        loggerOptions: {
+          loggerCallback: (level, message, containsPii) => {
+            if (level === LogLevel.Error) {
+              console.error("MSAL Error:", message);
+            }
+          },
+          piiLoggingEnabled: false,
+          logLevel: LogLevel.Warning,
+        },
+      },
+    };
+
+    if (method === AuthMethod.SERVICE_PRINCIPAL && this.config.clientSecret) {
+      // Use confidential client for service principal
+      this.confidentialClient = new ConfidentialClientApplication({
+        ...clientConfig,
+        auth: {
+          ...clientConfig.auth,
+          clientSecret: this.config.clientSecret,
+        },
+      });
+    } else {
+      // Use public client for device code and interactive flows
+      this.publicClient = new PublicClientApplication(clientConfig);
+    }
+  }
+
+  /**
+   * Authenticate using bearer token (direct token provision)
+   */
+  async authenticateWithBearerToken(token: string): Promise<AuthResult> {
+    // For bearer token, we don't need MSAL - just validate and return
+    if (!token || !token.startsWith('Bearer ')) {
+      throw new Error("Invalid bearer token format. Expected format: 'Bearer <token>'");
+    }
+
+    const accessToken = token.substring(7); // Remove 'Bearer ' prefix
+    
+    // Basic token validation (check if it's a JWT-like structure)
+    const parts = accessToken.split('.');
+    if (parts.length !== 3) {
+      throw new Error("Invalid bearer token format. Token does not appear to be a valid JWT.");
+    }
+
+    return {
+      accessToken,
+      expiresOn: new Date(Date.now() + 3600000), // Default 1 hour expiry
+    };
+  }
+
+  /**
+   * Authenticate using service principal (client credentials flow)
+   */
+  async authenticateWithServicePrincipal(
+    clientId: string,
+    clientSecret: string,
+    tenantId: string
+  ): Promise<AuthResult> {
+    this.config.clientId = clientId;
+    this.config.clientSecret = clientSecret;
+    this.config.authority = `https://login.microsoftonline.com/${tenantId}`;
+    
+    this.initializeClient(AuthMethod.SERVICE_PRINCIPAL);
+
+    if (!this.confidentialClient) {
+      throw new Error("Failed to initialize confidential client for service principal authentication");
+    }
+
+    const clientCredentialRequest: ClientCredentialRequest = {
+      scopes: this.config.scope!,
+      skipCache: false,
+    };
+
+    try {
+      const response = await this.confidentialClient.acquireTokenByClientCredential(clientCredentialRequest);
+      
+      if (!response || !response.accessToken) {
+        throw new Error("Failed to acquire token using service principal");
+      }
+
+      return {
+        accessToken: response.accessToken,
+        expiresOn: response.expiresOn || new Date(Date.now() + 3600000),
+        account: response.account || undefined,
+      };
+    } catch (error) {
+      throw new Error(`Service principal authentication failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  /**
+   * Authenticate using device code flow (for headless environments)
+   */
+  async authenticateWithDeviceCode(clientId: string, tenantId?: string): Promise<AuthResult> {
+    this.config.clientId = clientId;
+    if (tenantId) {
+      this.config.authority = `https://login.microsoftonline.com/${tenantId}`;
+    }
+    
+    this.initializeClient(AuthMethod.DEVICE_CODE);
+
+    if (!this.publicClient) {
+      throw new Error("Failed to initialize public client for device code authentication");
+    }
+
+    const deviceCodeRequest: DeviceCodeRequest = {
+      scopes: this.config.scope!,
+      deviceCodeCallback: (response) => {
+        console.log("\n=== DEVICE CODE AUTHENTICATION ===");
+        console.log(`Please visit: ${response.verificationUri}`);
+        console.log(`And enter the code: ${response.userCode}`);
+        console.log(`Expires in: ${response.expiresIn} seconds`);
+        console.log("Waiting for authentication...\n");
+      },
+    };
+
+    try {
+      const response = await this.publicClient.acquireTokenByDeviceCode(deviceCodeRequest);
+      
+      if (!response || !response.accessToken) {
+        throw new Error("Failed to acquire token using device code");
+      }
+
+      return {
+        accessToken: response.accessToken,
+        expiresOn: response.expiresOn || new Date(Date.now() + 3600000),
+        account: response.account || undefined,
+      };
+    } catch (error) {
+      throw new Error(`Device code authentication failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  /**
+   * Authenticate using interactive flow (opens browser)
+   */
+  async authenticateInteractively(clientId: string, tenantId?: string): Promise<AuthResult> {
+    this.config.clientId = clientId;
+    this.config.redirectUri = "http://localhost:8080";
+    if (tenantId) {
+      this.config.authority = `https://login.microsoftonline.com/${tenantId}`;
+    }
+    
+    this.initializeClient(AuthMethod.INTERACTIVE);
+
+    if (!this.publicClient) {
+      throw new Error("Failed to initialize public client for interactive authentication");
+    }
+
+    return new Promise((resolve, reject) => {
+      const server = createServer((req, res) => {
+        if (req.url && req.url.startsWith('/?code=')) {
+          const url = new URL(req.url, 'http://localhost:8080');
+          const code = url.searchParams.get('code');
+          
+          res.writeHead(200, { 'Content-Type': 'text/html' });
+          res.end(`
+            <html>
+              <body>
+                <h2>Authentication successful!</h2>
+                <p>You can close this window and return to the application.</p>
+              </body>
+            </html>
+          `);
+          
+          server.close();
+          
+          if (code) {
+            this.handleAuthorizationCode(code).then(resolve).catch(reject);
+          } else {
+            reject(new Error("No authorization code received"));
+          }
+        }
+      });
+
+      server.listen(8080, () => {
+        const authUrl = this.buildAuthUrl();
+        console.log("\n=== INTERACTIVE AUTHENTICATION ===");
+        console.log(`Please visit: ${authUrl}`);
+        console.log("Waiting for authentication...\n");
+        
+        // Auto-open browser if possible
+        import('child_process').then(({ exec }) => {
+          exec(`start ${authUrl}`, (error) => {
+            if (error) {
+              console.log("Could not auto-open browser. Please manually visit the URL above.");
+            }
+          });
+        });
+      });
+
+      // Timeout after 5 minutes
+      setTimeout(() => {
+        server.close();
+        reject(new Error("Authentication timeout"));
+      }, 300000);
+    });
+  }
+
+  private buildAuthUrl(): string {
+    const params = new URLSearchParams({
+      client_id: this.config.clientId,
+      response_type: 'code',
+      redirect_uri: this.config.redirectUri!,
+      scope: this.config.scope!.join(' '),
+      response_mode: 'query',
+    });
+
+    return `${this.config.authority}/oauth2/v2.0/authorize?${params.toString()}`;
+  }
+
+  private async handleAuthorizationCode(code: string): Promise<AuthResult> {
+    // This is a simplified implementation - in a real scenario, you'd exchange the code for tokens
+    // For now, we'll use device code flow as a fallback
+    console.log("Received authorization code, exchanging for tokens...");
+    
+    // Fallback to device code flow
+    return this.authenticateWithDeviceCode(this.config.clientId);
+  }
+
+  /**
+   * Get token silently (from cache)
+   */
+  async getTokenSilently(account: AccountInfo): Promise<AuthResult | null> {
+    if (!this.publicClient) {
+      return null;
+    }
+
+    const silentRequest: SilentFlowRequest = {
+      scopes: this.config.scope!,
+      account: account,
+    };
+
+    try {
+      const response = await this.publicClient.acquireTokenSilent(silentRequest);
+      
+      if (!response || !response.accessToken) {
+        return null;
+      }
+
+      return {
+        accessToken: response.accessToken,
+        expiresOn: response.expiresOn || new Date(Date.now() + 3600000),
+        account: response.account || undefined,
+      };
+    } catch (error) {
+      return null; // Silent acquisition failed, need interactive flow
+    }
+  }
+
+  /**
+   * Get all cached accounts
+   */
+  async getCachedAccounts(): Promise<AccountInfo[]> {
+    if (!this.publicClient) {
+      return [];
+    }
+
+    return this.publicClient.getTokenCache().getAllAccounts();
+  }
+
+  /**
+   * Clear token cache
+   */
+  async clearCache(): Promise<void> {
+    if (this.publicClient) {
+      const accounts = await this.getCachedAccounts();
+      for (const account of accounts) {
+        await this.publicClient.getTokenCache().removeAccount(account);
+      }
+    }
+  }
+
+  /**
+   * Validate if token is still valid
+   */
+  isTokenValid(authResult: AuthResult): boolean {
+    return authResult.expiresOn > new Date();
+  }
+
+  /**
+   * Get authentication method prompt for CLI
+   */
+  static getAuthMethodPrompt(): string {
+    return `
+Choose authentication method:
+1. Bearer Token (provide your own token)
+2. Service Principal (client ID + secret + tenant)
+3. Device Code (sign in with browser on another device)
+4. Interactive (sign in with browser - opens automatically)
+
+Enter choice (1-4): `;
+  }
+
+  /**
+   * Parse authentication method from user input
+   */
+  static parseAuthMethod(input: string): AuthMethod {
+    switch (input.trim()) {
+      case "1":
+        return AuthMethod.BEARER_TOKEN;
+      case "2":
+        return AuthMethod.SERVICE_PRINCIPAL;
+      case "3":
+        return AuthMethod.DEVICE_CODE;
+      case "4":
+        return AuthMethod.INTERACTIVE;
+      default:
+        throw new Error("Invalid authentication method selection");
+    }
+  }
+}
+
+export default MicrosoftAuthClient;

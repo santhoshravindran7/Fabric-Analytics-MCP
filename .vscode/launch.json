@@ -1,0 +1,29 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug MCP Server",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/index.js",
+      "console": "integratedTerminal",
+      "outFiles": ["${workspaceFolder}/build/**/*.js"],
+      "sourceMaps": true,
+      "skipFiles": ["<node_internals>/**"],
+      "env": {
+        "NODE_ENV": "development"
+      }
+    },
+    {
+      "name": "Build and Debug",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/index.js",
+      "console": "integratedTerminal",
+      "outFiles": ["${workspaceFolder}/build/**/*.js"],
+      "sourceMaps": true,
+      "skipFiles": ["<node_internals>/**"],
+      "preLaunchTask": "Build and Run MCP Server"
+    }
+  ]
+}

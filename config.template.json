@@ -1,0 +1,93 @@
+{
+  "description": "Configuration template for Microsoft Fabric Analytics MCP Server testing",
+  "fabric_credentials": {
+    "bearer_token": "YOUR_BEARER_TOKEN_HERE",
+    "workspace_id": "YOUR_WORKSPACE_ID_HERE",
+    "lakehouse_id": "YOUR_LAKEHOUSE_ID_HERE",
+    "notebook_id": "YOUR_NOTEBOOK_ID_HERE"
+  },
+  "testing_options": {
+    "include_performance_tests": true,
+    "timeout_seconds": 300,
+    "retry_attempts": 3,
+    "verbose_logging": true
+  },
+  "spark_cluster_configs": {
+    "small": {
+      "driverCores": 2,
+      "driverMemory": "4g",
+      "executorCores": 1,
+      "executorMemory": "2g",
+      "numExecutors": 2
+    },
+    "medium": {
+      "driverCores": 4,
+      "driverMemory": "8g",
+      "executorCores": 2,
+      "executorMemory": "4g",
+      "numExecutors": 3
+    },
+    "large": {
+      "driverCores": 8,
+      "driverMemory": "16g",
+      "executorCores": 4,
+      "executorMemory": "8g",
+      "numExecutors": 5
+    }
+  },
+  "sample_data_scenarios": {
+    "sales_analysis": {
+      "description": "Comprehensive sales data analysis with forecasting",
+      "estimated_runtime": "5-10 minutes",
+      "required_permissions": ["lakehouse_read", "spark_compute"]
+    },
+    "customer_segmentation": {
+      "description": "Customer lifetime value and segmentation analysis",
+      "estimated_runtime": "3-7 minutes",
+      "required_permissions": ["lakehouse_read", "spark_compute"]
+    },
+    "inventory_optimization": {
+      "description": "Inventory forecasting and optimization",
+      "estimated_runtime": "8-15 minutes",
+      "required_permissions": ["lakehouse_read", "spark_compute", "ml_workspace"]
+    }
+  },
+  "notebook_test_scenarios": [
+    {
+      "name": "Financial Reporting Automation",
+      "parameters": {
+        "report_period": "Q4-2024",
+        "include_forecasts": true,
+        "departments": ["Sales", "Marketing", "Finance"],
+        "export_formats": ["xlsx", "pdf"],
+        "email_distribution": true
+      }
+    },
+    {
+      "name": "Real-time Dashboard Updates",
+      "parameters": {
+        "refresh_interval_minutes": 15,
+        "data_sources": ["sales_db", "marketing_api", "finance_warehouse"],
+        "alert_thresholds": {
+          "revenue_variance": 0.1,
+          "conversion_rate_drop": 0.05
+        }
+      }
+    }
+  ],
+  "environment_variables": {
+    "FABRIC_BEARER_TOKEN": "Set this to your actual bearer token",
+    "FABRIC_WORKSPACE_ID": "Set this to your workspace ID",
+    "FABRIC_LAKEHOUSE_ID": "Set this to your lakehouse ID",
+    "FABRIC_NOTEBOOK_ID": "Set this to your notebook ID",
+    "MCP_SERVER_HOST": "localhost",
+    "MCP_SERVER_PORT": "3000",
+    "LOG_LEVEL": "INFO"
+  },
+  "usage_instructions": {
+    "quick_start": "Copy this file to config.json and replace YOUR_*_HERE with actual values",
+    "command_line": "python real_fabric_test.py --config config.json",
+    "interactive": "python real_fabric_test.py --interactive",
+    "performance": "python real_fabric_test.py --config config.json --performance"
+  }
+}

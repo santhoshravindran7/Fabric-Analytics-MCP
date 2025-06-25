@@ -1,0 +1,60 @@
+{
+  "name": "mcp-for-microsoft-fabric-analytics",
+  "version": "1.0.0",
+  "description": "MCP server for Microsoft Fabric Analytics - enables LLMs to access and analyze Microsoft Fabric data",
+  "type": "module",
+  "main": "./build/index.js",
+  "bin": {
+    "fabric-analytics": "./build/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node build/index.js",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "prepare": "npm run build"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "microsoft-fabric",
+    "analytics",
+    "data-analysis",
+    "llm",
+    "ai",
+    "claude",
+    "spark",
+    "livy",
+    "msal",
+    "authentication"
+  ],
+  "author": "Microsoft Fabric Analytics Community",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/your-username/microsoft-fabric-analytics-mcp.git"
+  },
+  "homepage": "https://github.com/your-username/microsoft-fabric-analytics-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/your-username/microsoft-fabric-analytics-mcp/issues"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "build",
+    "README.md",
+    "LICENSE",
+    "CONTRIBUTING.md",
+    "SECURITY.md"
+  ],
+  "devDependencies": {
+    "@types/node": "^24.0.3",
+    "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "@azure/msal-node": "^2.16.2",
+    "@modelcontextprotocol/sdk": "^1.13.0",
+    "zod": "^3.25.67"
+  }
+}

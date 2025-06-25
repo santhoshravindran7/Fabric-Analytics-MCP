@@ -1,0 +1,9 @@
+{
+  "servers": {
+    "fabric-analytics": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["build/index.js"]
+    }
+  }
+}
