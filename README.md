@@ -442,42 +442,62 @@ Use Azure AD application credentials:
 - **Client Secret** 
 - **Tenant ID** (Directory ID)
 
+**Environment Variables Setup**:
 ```bash
-# Service principal setup in Azure Portal:
-# 1. Register new application
-# 2. Generate client secret
-# 3. Grant Fabric permissions
-python comprehensive_auth_validation.py
+export FABRIC_AUTH_METHOD="service_principal"
+export FABRIC_CLIENT_ID="your-app-client-id"
+export FABRIC_CLIENT_SECRET="your-app-client-secret"
+export FABRIC_TENANT_ID="your-tenant-id"
+export FABRIC_DEFAULT_WORKSPACE_ID="your-workspace-id"
+```
+
+**Claude Desktop Configuration**:
+```json
+{
+  "mcpServers": {
+    "fabric-analytics": {
+      "command": "node",
+      "args": ["/path/to/build/index.js"],
+      "env": {
+        "FABRIC_AUTH_METHOD": "service_principal",
+        "FABRIC_CLIENT_ID": "your-client-id",
+        "FABRIC_CLIENT_SECRET": "your-client-secret",
+        "FABRIC_TENANT_ID": "your-tenant-id"
+      }
+    }
+  }
+}
 ```
 
 #### **📱 3. Device Code Authentication**
 Sign in with browser on another device (great for headless environments):
 ```bash
-# Device code flow - displays code for browser login
-python spark_monitoring_test.py
+export FABRIC_AUTH_METHOD="device_code"
+export FABRIC_CLIENT_ID="your-client-id"
+export FABRIC_TENANT_ID="your-tenant-id"
 ```
 
 #### **🌐 4. Interactive Authentication**
 Automatic browser-based authentication:
 ```bash
-# Opens browser automatically for sign-in
-python mcp_spark_monitoring_demo.py
+export FABRIC_AUTH_METHOD="interactive"
+export FABRIC_CLIENT_ID="your-client-id"
+export FABRIC_TENANT_ID="your-tenant-id"
 ```
 
-#### **🔧 Authentication Setup**
+#### **🔧 Complete Authentication Setup**
 
-1. **Install Python dependencies:**
-```bash
-pip install -r requirements.txt
+📚 **Detailed Guides**:
+- **[Authentication Setup Guide](AUTHENTICATION_SETUP.md)** - Complete Azure AD setup
+- **[Claude Desktop Config Examples](CLAUDE_DESKTOP_CONFIG_EXAMPLES.md)** - Ready-to-use configurations
+
+#### **🔍 Authentication Testing**
+
+Check your authentication status:
 ```
-
-2. **Choose your authentication method:**
-All test scripts now include interactive authentication prompts that support all four methods.
-
-3. **Validate your setup:**
-```bash
-# Comprehensive validation of all authentication methods
-python comprehensive_auth_validation.py
+"Check my Fabric authentication status"
+"What authentication method am I using?"
+"Test my Microsoft Fabric authentication setup"
 ```
 
 #### **🔒 Security Best Practices**

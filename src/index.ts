@@ -5,6 +5,109 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { FabricApiClient, ApiResponse, JobExecutionResult } from './fabric-client.js';
 import { SimulationService } from './simulation-service.js';
+import { MicrosoftAuthClient, AuthMethod, AuthResult } from './auth-client.js';
+
+// Enhanced Authentication Configuration
+interface AuthConfig {
+  method: AuthMethod;
+  clientId?: string;
+  clientSecret?: string;
+  tenantId?: string;
+  defaultWorkspaceId?: string;
+}
+
+/**
+ * Load authentication configuration from environment variables
+ */
+function loadAuthConfig(): AuthConfig {
+  const method = (process.env.FABRIC_AUTH_METHOD as AuthMethod) || AuthMethod.BEARER_TOKEN;
+  
+  return {
+    method,
+    clientId: process.env.FABRIC_CLIENT_ID,
+    clientSecret: process.env.FABRIC_CLIENT_SECRET,
+    tenantId: process.env.FABRIC_TENANT_ID,
+    defaultWorkspaceId: process.env.FABRIC_DEFAULT_WORKSPACE_ID
+  };
+}
+
+// Global auth configuration
+const authConfig = loadAuthConfig();
+let cachedAuthResult: AuthResult | null = null;
+let authClient: MicrosoftAuthClient | null = null;
+
+/**
+ * Initialize authentication client if needed
+ */
+function initializeAuthClient(): void {
+  if (!authClient && authConfig.clientId && authConfig.method !== AuthMethod.BEARER_TOKEN) {
+    authClient = new MicrosoftAuthClient({
+      clientId: authConfig.clientId,
+      clientSecret: authConfig.clientSecret,
+      authority: authConfig.tenantId ? `https://login.microsoftonline.com/${authConfig.tenantId}` : undefined
+    });
+  }
+}
+
+/**
+ * Get or refresh authentication token
+ */
+async function getAuthToken(): Promise<string | null> {
+  // If using bearer token method or no auth configured, return null (use simulation)
+  if (authConfig.method === AuthMethod.BEARER_TOKEN || !authConfig.clientId) {
+    return null;
+  }
+
+  // Check if we have a valid cached token
+  if (cachedAuthResult && cachedAuthResult.expiresOn > new Date()) {
+    return cachedAuthResult.accessToken;
+  }
+
+  // Initialize auth client if needed
+  initializeAuthClient();
+  if (!authClient) {
+    console.error("Authentication client not initialized");
+    return null;
+  }
+
+  try {
+    switch (authConfig.method) {
+      case AuthMethod.SERVICE_PRINCIPAL:
+        if (!authConfig.clientSecret || !authConfig.tenantId) {
+          throw new Error("Service Principal requires CLIENT_SECRET and TENANT_ID");
+        }
+        cachedAuthResult = await authClient.authenticateWithServicePrincipal(
+          authConfig.clientId!,
+          authConfig.clientSecret,
+          authConfig.tenantId
+        );
+        break;
+
+      case AuthMethod.DEVICE_CODE:
+        cachedAuthResult = await authClient.authenticateWithDeviceCode(
+          authConfig.clientId!,
+          authConfig.tenantId
+        );
+        break;
+
+      case AuthMethod.INTERACTIVE:
+        cachedAuthResult = await authClient.authenticateInteractively(
+          authConfig.clientId!,
+          authConfig.tenantId
+        );
+        break;
+
+      default:
+        throw new Error(`Unsupported authentication method: ${authConfig.method}`);
+    }
+
+    console.error(`✅ Authentication successful using ${authConfig.method}`);
+    return cachedAuthResult.accessToken;
+  } catch (error) {
+    console.error(`❌ Authentication failed: ${error instanceof Error ? error.message : String(error)}`);
+    return null;
+  }
+}
 
 // Server instance
 const server = new McpServer({
@@ -186,9 +289,9 @@ const SparkDashboardSchema = BaseWorkspaceSchema.extend({
 });
 
 /**
- * Helper function to handle API calls with fallback to simulation.
- * @param bearerToken - Bearer token for authentication
- * @param workspaceId - Workspace ID
+ * Helper function to handle API calls with enhanced authentication support.
+ * @param bearerToken - Bearer token for authentication (optional if using env auth)
+ * @param workspaceId - Workspace ID  
  * @param operation - Operation name for simulation
  * @param apiCall - Function to call the actual API
  * @param simulationParams - Parameters for simulation
@@ -201,9 +304,22 @@ async function executeApiCall<T>(
   apiCall: (client: FabricApiClient) => Promise<ApiResponse<T>>,
   simulationParams?: any
 ): Promise<ApiResponse<T>> {
-  if (bearerToken && bearerToken !== "test-token" && bearerToken !== "simulation") {
+  let tokenToUse = bearerToken;
+
+  // If no bearer token provided, try to get one from environment auth
+  if (!tokenToUse || tokenToUse === "test-token" || tokenToUse === "simulation") {
+    const envToken = await getAuthToken();
+    if (envToken) {
+      tokenToUse = envToken;
+    }
+  }
+
+  // Use default workspace if none provided and configured
+  const workspaceToUse = workspaceId || authConfig.defaultWorkspaceId || workspaceId;
+
+  if (tokenToUse && tokenToUse !== "test-token" && tokenToUse !== "simulation") {
     try {
-      const client = new FabricApiClient(bearerToken, workspaceId);
+      const client = new FabricApiClient(tokenToUse, workspaceToUse);
       return await apiCall(client);
     } catch (error) {
       return {
@@ -1018,6 +1134,75 @@ ${JSON.stringify(dashboard.applications, null, 2)}
     };
   }
 );
+
+// Authentication Status Tool
+server.tool(
+  "check-fabric-auth-status",
+  "Check current authentication status and configuration",
+  z.object({}).shape,
+  async () => {
+    const status = {
+      authMethod: authConfig.method,
+      hasClientId: !!authConfig.clientId,
+      hasClientSecret: !!authConfig.clientSecret,
+      hasTenantId: !!authConfig.tenantId,
+      hasDefaultWorkspace: !!authConfig.defaultWorkspaceId,
+      tokenCached: !!cachedAuthResult,
+      tokenExpiry: cachedAuthResult?.expiresOn?.toISOString() || null,
+      tokenValid: cachedAuthResult ? cachedAuthResult.expiresOn > new Date() : false
+    };
+
+    const statusText = `
+🔐 **Microsoft Fabric Authentication Status**
+${'='.repeat(50)}
+
+**Authentication Method**: ${status.authMethod}
+
+**Configuration**:
+  ✅ Client ID: ${status.hasClientId ? 'Configured' : '❌ Missing'}
+  ${status.authMethod === 'service_principal' ? `✅ Client Secret: ${status.hasClientSecret ? 'Configured' : '❌ Missing'}` : ''}
+  ${status.authMethod !== 'bearer' ? `✅ Tenant ID: ${status.hasTenantId ? 'Configured' : '❌ Missing'}` : ''}
+  ✅ Default Workspace: ${status.hasDefaultWorkspace ? authConfig.defaultWorkspaceId : '❌ Not configured'}
+
+**Token Status**:
+  • Token Cached: ${status.tokenCached ? '✅ Yes' : '❌ No'}
+  • Token Valid: ${status.tokenValid ? '✅ Yes' : '❌ No/Expired'}
+  • Expires: ${status.tokenExpiry || 'N/A'}
+
+**Setup Instructions**:
+${status.authMethod === 'bearer' ? `
+For bearer token authentication, provide a valid token in tool calls.
+` : `
+To use ${status.authMethod} authentication, ensure these environment variables are set:
+${status.authMethod === 'service_principal' ? `
+  - FABRIC_CLIENT_ID
+  - FABRIC_CLIENT_SECRET  
+  - FABRIC_TENANT_ID
+` : status.authMethod === 'device_code' ? `
+  - FABRIC_CLIENT_ID
+  - FABRIC_TENANT_ID (optional)
+` : `
+  - FABRIC_CLIENT_ID
+  - FABRIC_TENANT_ID (optional)
+`}
+  - FABRIC_DEFAULT_WORKSPACE_ID (optional)
+`}
+
+**Next Steps**:
+${!status.tokenValid && status.authMethod !== 'bearer' ? `
+⚠️  Authentication required! Use any Fabric tool to trigger authentication.
+` : status.tokenValid ? `
+✅ Ready to use Microsoft Fabric APIs!
+` : `
+💡 Using simulation mode. Configure authentication for real API access.
+`}
+    `;
+
+    return {
+      content: [{ type: "text", text: statusText }]
+    };
+  }
+)
 
 async function main() {
   const transport = new StdioServerTransport();
