@@ -39,7 +39,7 @@ Good pull requests (patches, improvements, new features) are a fantastic help. T
 
 1. **Fork and clone the repo**
    ```bash
-   git clone https://github.com/your-username/microsoft-fabric-analytics-mcp.git
+   git clone https://github.com/santhoshravindran7/Fabric-Analytics-MCP.git
    cd microsoft-fabric-analytics-mcp
    ```
 

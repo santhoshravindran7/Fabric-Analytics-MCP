@@ -32,11 +32,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/your-username/microsoft-fabric-analytics-mcp.git"
+    "url": "git+https://github.com/santhoshravindran7/Fabric-Analytics-MCP.git"
   },
-  "homepage": "https://github.com/your-username/microsoft-fabric-analytics-mcp#readme",
+  "homepage": "https://github.com/santhoshravindran7/Fabric-Analytics-MCP#readme",
   "bugs": {
-    "url": "https://github.com/your-username/microsoft-fabric-analytics-mcp/issues"
+    "url": "https://github.com/santhoshravindran7/Fabric-Analytics-MCP/issues"
   },
   "engines": {
     "node": ">=18.0.0"

@@ -5,8 +5,8 @@
 [![Node.js](https://img.shields.io/badge/Node.js-18+-green.svg)](https://nodejs.org/)
 [![Model Context Protocol](https://img.shields.io/badge/MCP-Compatible-purple.svg)](https://modelcontextprotocol.io/)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](http://makeapullrequest.com)
-[![GitHub issues](https://img.shields.io/github/issues/your-username/microsoft-fabric-analytics-mcp.svg)](https://github.com/your-username/microsoft-fabric-analytics-mcp/issues)
-[![GitHub stars](https://img.shields.io/github/stars/your-username/microsoft-fabric-analytics-mcp.svg)](https://github.com/your-username/microsoft-fabric-analytics-mcp/stargazers)
+[![GitHub issues](https://img.shields.io/github/issues/santhoshravindran7/Fabric-Analytics-MCP.svg)](https://github.com/santhoshravindran7/Fabric-Analytics-MCP/issues)
+[![GitHub stars](https://img.shields.io/github/stars/santhoshravindran7/Fabric-Analytics-MCP.svg)](https://github.com/santhoshravindran7/Fabric-Analytics-MCP/stargazers)
 
 A comprehensive Model Context Protocol (MCP) server that provides analytics capabilities and tools for interacting with Microsoft Fabric data platform. This server enables AI assistants like Claude to seamlessly access, analyze, and monitor Microsoft Fabric resources through standardized MCP protocols, bringing the power of Microsoft Fabric directly to your AI conversations.
 
@@ -274,8 +274,8 @@ A comprehensive Model Context Protocol (MCP) server that provides analytics capa
 
 1. **Clone and Install**
    ```bash
-   git clone https://github.com/your-username/microsoft-fabric-analytics-mcp.git
-   cd microsoft-fabric-analytics-mcp
+   git clone https://github.com/santhoshravindran7/Fabric-Analytics-MCP.git
+   cd Fabric-Analytics-MCP
    npm install
    npm run build
    ```
@@ -601,7 +601,7 @@ We welcome contributions! Here's how to get started:
 - **Never commit authentication tokens** to version control
 - Use environment variables for sensitive configuration
 - Follow Microsoft Fabric security best practices
-- Report security issues privately via [GitHub security advisories](https://github.com/your-username/microsoft-fabric-analytics-mcp/security/advisories)
+- Report security issues privately via [GitHub security advisories](https://github.com/santhoshravindran7/Fabric-Analytics-MCP/security/advisories)
 - See [SECURITY.md](SECURITY.md) for our full security policy
 
 ## 📝 **License**
@@ -613,7 +613,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 For issues and questions:
 - 📖 Check the [MCP documentation](https://modelcontextprotocol.io/)
 - 📚 Review [Microsoft Fabric API documentation](https://docs.microsoft.com/en-us/fabric/)
-- 🐛 [Open an issue](https://github.com/your-username/microsoft-fabric-analytics-mcp/issues) in this repository
+- 🐛 [Open an issue](https://github.com/santhoshravindran7/Fabric-Analytics-MCP/issues) in this repository
 - 💬 Join the community discussions
 
 ## 🏆 **Acknowledgments**
