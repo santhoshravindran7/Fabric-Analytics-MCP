@@ -28,6 +28,7 @@ A comprehensive Model Context Protocol (MCP) server that provides analytics capa
 ## 🌟 **Key Features**
 
 - **🔄 Complete CRUD Operations** - Create, read, update, and delete Fabric items
+- **📓 Notebook Management** - Create, execute, and manage Fabric notebooks with templates
 - **⚡ Livy API Integration** - Full Spark session and batch job management
 - **📊 Spark Application Monitoring** - Real-time monitoring across workspaces and items
 - **🤖 Claude Desktop Ready** - Plug-and-play integration with Claude Desktop
@@ -307,6 +308,67 @@ az mcp server create --name "fabric-analytics-mcp" --repository "santhoshravindr
   - `bearerToken`: Microsoft Fabric bearer token
   - `workspaceId`: Microsoft Fabric workspace ID
 
+### 📓 **Notebook Management**
+
+The MCP server provides comprehensive notebook management capabilities with predefined templates and custom notebook support.
+
+#### Create Notebook from Template
+- **Tool**: `create-fabric-notebook`
+- **Description**: Create new Fabric notebooks from predefined templates or custom definitions
+- **Parameters**:
+  - `bearerToken`: Microsoft Fabric bearer token
+  - `workspaceId`: Microsoft Fabric workspace ID
+  - `displayName`: Display name for the new notebook
+  - `template`: Template type (blank, sales_analysis, nyc_taxi_analysis, data_exploration, machine_learning, custom)
+  - `customNotebook`: Custom notebook definition (required if template is 'custom')
+  - `environmentId`: Optional environment ID to attach
+  - `lakehouseId`: Optional default lakehouse ID
+  - `lakehouseName`: Optional default lakehouse name
+
+**Available Templates:**
+- **blank**: Basic notebook with minimal setup
+- **sales_analysis**: Comprehensive sales data analysis with sample dataset
+- **nyc_taxi_analysis**: NYC taxi trip data analysis with sample dataset
+- **data_exploration**: Structured data exploration template
+- **machine_learning**: Complete ML workflow template
+- **custom**: Use your own notebook definition
+
+#### Get Notebook Definition
+- **Tool**: `get-fabric-notebook-definition`
+- **Description**: Retrieve the notebook definition (cells, metadata) from an existing Fabric notebook
+- **Parameters**:
+  - `bearerToken`: Microsoft Fabric bearer token
+  - `workspaceId`: Microsoft Fabric workspace ID
+  - `notebookId`: ID of the notebook to retrieve
+  - `format`: Format to return (ipynb or fabricGitSource)
+
+#### Update Notebook Definition
+- **Tool**: `update-fabric-notebook-definition`
+- **Description**: Update the notebook definition (cells, metadata) of an existing Fabric notebook
+- **Parameters**:
+  - `bearerToken`: Microsoft Fabric bearer token
+  - `workspaceId`: Microsoft Fabric workspace ID
+  - `notebookId`: ID of the notebook to update
+  - `notebookDefinition`: Updated notebook definition object
+
+#### Execute Notebook
+- **Tool**: `run-fabric-notebook`
+- **Description**: Execute a Fabric notebook on-demand with optional parameters and configuration
+- **Parameters**:
+  - `bearerToken`: Microsoft Fabric bearer token
+  - `workspaceId`: Microsoft Fabric workspace ID
+  - `notebookId`: ID of the notebook to run
+  - `parameters`: Optional notebook parameters (key-value pairs with types)
+  - `configuration`: Optional execution configuration (environment, lakehouse, pools, etc.)
+
+**Features:**
+- 📓 Base64 encoded notebook payload support
+- 🔧 Comprehensive metadata management
+- 🌐 Environment and lakehouse integration
+- 🎛️ Parameterized notebook execution
+- ⚡ Spark configuration support
+- 🔤 Support for multiple programming languages (Python, Scala, SQL, R)
+
 ## 🚀 **Quick Start**
 
 ### **Prerequisites**
@@ -321,8 +383,10 @@ az mcp server create --name "fabric-analytics-mcp" --repository "santhoshravindr
    git clone https://github.com/santhoshravindran7/Fabric-Analytics-MCP.git
    cd Fabric-Analytics-MCP
    npm install
-   npm run build
+   npm run build    # ✅ All configuration files included!
    ```
+
+   > **📝 Note**: All essential configuration files (`tsconfig.json`, `jest.config.json`, etc.) are now properly included in the repository. Previous build issues have been resolved.
 
 2. **Configure Claude Desktop**
    
@@ -446,6 +510,14 @@ Once connected to Claude Desktop, you can ask natural language questions like:
 - "Create a new Notebook called 'Data Analysis'"
 - "Update the description of my lakehouse"
 - "Delete the test notebook from my workspace"
+
+### **Notebook Management:**
+- "Create a sales analysis notebook with sample data"
+- "Generate a new NYC taxi analysis notebook"
+- "Create a machine learning notebook template"
+- "Get the definition of my existing notebook"
+- "Run my notebook with specific parameters"
+- "Update my notebook with new cells"
 
 ### **Data Operations:**
 - "Query the sales dataset to get total revenue by region"

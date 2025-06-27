@@ -611,4 +611,69 @@ export class FabricApiClient {
       data: dashboard
     };
   }
+
+  // ==================== NOTEBOOK MANAGEMENT METHODS ====================
+
+  /**
+   * Create a notebook with definition
+   * @param payload - Notebook creation payload with definition
+   * @returns Promise resolving to creation result
+   */
+  async createNotebook(payload: {
+    displayName: string;
+    type: string;
+    definition?: {
+      format: string;
+      parts: Array<{
+        path: string;
+        payload: string;
+        payloadType: string;
+      }>;
+    };
+  }): Promise<ApiResponse> {
+    return this.makeRequest("items", { method: "POST", body: payload });
+  }
+
+  /**
+   * Get the definition of a notebook item
+   * @param itemId - ID of the notebook item
+   * @param format - Format to return (ipynb or fabricGitSource)
+   * @returns Promise resolving to notebook definition
+   */
+  async getItemDefinition(itemId: string, format: string = "ipynb"): Promise<ApiResponse> {
+    return this.makeRequest(`items/${itemId}/getDefinition?format=${format}`, { method: "POST" });
+  }
+
+  /**
+   * Update the definition of a notebook item
+   * @param itemId - ID of the notebook item
+   * @param definition - Updated notebook definition
+   * @returns Promise resolving to update result
+   */
+  async updateItemDefinition(itemId: string, definition: {
+    format: string;
+    parts: Array<{
+      path: string;
+      payload: string;
+      payloadType: string;
+    }>;
+  }): Promise<ApiResponse> {
+    return this.makeRequest(`items/${itemId}/updateDefinition`, { 
+      method: "POST", 
+      body: { definition } 
+    });
+  }
+
+  /**
+   * Execute a notebook with parameters and configuration
+   * @param notebookId - ID of the notebook to run
+   * @param payload - Execution configuration
+   * @returns Promise resolving to execution result
+   */
+  async runNotebook(notebookId: string, payload: any): Promise<ApiResponse> {
+    return this.makeRequest(`items/${notebookId}/jobs/instances?jobType=RunNotebook`, { 
+      method: "POST", 
+      body: payload 
+    });
+  }
 }
