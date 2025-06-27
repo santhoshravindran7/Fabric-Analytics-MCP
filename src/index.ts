@@ -290,6 +290,534 @@ const SparkDashboardSchema = BaseWorkspaceSchema.extend({
   maxResults: z.number().min(1).max(1000).default(100).describe("Maximum number of results")
 });
 
+// Notebook Management Schemas
+const NotebookCell = z.object({
+  cell_type: z.enum(["code", "markdown"]).describe("Type of notebook cell"),
+  source: z.array(z.string()).describe("Cell content lines"),
+  execution_count: z.number().nullable().optional().describe("Execution count for code cells"),
+  outputs: z.array(z.any()).optional().describe("Cell outputs"),
+  metadata: z.record(z.any()).optional().describe("Cell metadata")
+});
+
+const NotebookDefinition = z.object({
+  nbformat: z.number().default(4).describe("Notebook format version"),
+  nbformat_minor: z.number().default(5).describe("Notebook format minor version"),
+  cells: z.array(NotebookCell).describe("Notebook cells"),
+  metadata: z.object({
+    language_info: z.object({
+      name: z.enum(["python", "scala", "sql", "r"]).default("python").describe("Primary language")
+    }).optional(),
+    dependencies: z.object({
+      environment: z.object({
+        environmentId: z.string().describe("Environment ID"),
+        workspaceId: z.string().describe("Environment workspace ID")
+      }).optional().describe("Environment configuration"),
+      lakehouse: z.object({
+        default_lakehouse: z.string().describe("Default lakehouse ID"),
+        default_lakehouse_name: z.string().describe("Default lakehouse name"),
+        default_lakehouse_workspace_id: z.string().describe("Default lakehouse workspace ID")
+      }).optional().describe("Lakehouse configuration")
+    }).optional().describe("Notebook dependencies")
+  }).optional().describe("Notebook metadata")
+});
+
+const CreateNotebookFromTemplateSchema = BaseWorkspaceSchema.extend({
+  displayName: z.string().min(1).max(256).describe("Display name for the notebook"),
+  template: z.enum([
+    "blank",
+    "sales_analysis", 
+    "nyc_taxi_analysis",
+    "data_exploration",
+    "machine_learning",
+    "custom"
+  ]).default("blank").describe("Notebook template to use"),
+  customNotebook: NotebookDefinition.optional().describe("Custom notebook definition (required if template is 'custom')"),
+  environmentId: z.string().optional().describe("Environment ID to attach"),
+  lakehouseId: z.string().optional().describe("Default lakehouse ID"),
+  lakehouseName: z.string().optional().describe("Default lakehouse name")
+});
+
+const GetNotebookDefinitionSchema = BaseWorkspaceSchema.extend({
+  notebookId: z.string().min(1).describe("Notebook ID to get definition for"),
+  format: z.enum(["ipynb", "fabricGitSource"]).default("ipynb").describe("Format to return notebook in")
+});
+
+const RunNotebookSchema = BaseWorkspaceSchema.extend({
+  notebookId: z.string().min(1).describe("Notebook ID to run"),
+  parameters: z.record(z.object({
+    value: z.any().describe("Parameter value"),
+    type: z.enum(["string", "int", "float", "bool"]).default("string").describe("Parameter type")
+  })).optional().describe("Notebook parameters"),
+  configuration: z.object({
+    conf: z.record(z.string()).optional().describe("Spark configuration"),
+    environment: z.object({
+      id: z.string().describe("Environment ID"),
+      name: z.string().optional().describe("Environment name")
+    }).optional().describe("Environment to use"),
+    defaultLakehouse: z.object({
+      name: z.string().describe("Lakehouse name"),
+      id: z.string().describe("Lakehouse ID"),
+      workspaceId: z.string().optional().describe("Lakehouse workspace ID")
+    }).optional().describe("Default lakehouse"),
+    useStarterPool: z.boolean().default(false).describe("Use starter pool"),
+    useWorkspacePool: z.string().optional().describe("Workspace pool name")
+  }).optional().describe("Execution configuration")
+});
+
+const UpdateNotebookDefinitionSchema = BaseWorkspaceSchema.extend({
+  notebookId: z.string().min(1).describe("Notebook ID to update"),
+  notebookDefinition: NotebookDefinition.describe("Updated notebook definition")
+});
+
+/**
+ * Generate predefined notebook templates
+ */
+function getNotebookTemplate(template: string): any {
+  const templates = {
+    blank: {
+      nbformat: 4,
+      nbformat_minor: 5,
+      cells: [
+        {
+          cell_type: "markdown",
+          source: ["# New Notebook\n\nStart your analysis here..."],
+          metadata: {}
+        },
+        {
+          cell_type: "code",
+          source: ["# Import libraries\nimport pandas as pd\nimport numpy as np"],
+          execution_count: null,
+          outputs: [],
+          metadata: {}
+        }
+      ],
+      metadata: {
+        language_info: { name: "python" }
+      }
+    },
+    
+    sales_analysis: {
+      nbformat: 4,
+      nbformat_minor: 5,
+      cells: [
+        {
+          cell_type: "markdown",
+          source: [
+            "# Sales Data Analysis\n\n",
+            "This notebook provides a comprehensive analysis of sales data including:\n",
+            "- Data loading and exploration\n",
+            "- Sales trend analysis\n",
+            "- Customer segmentation\n",
+            "- Revenue forecasting\n"
+          ],
+          metadata: {}
+        },
+        {
+          cell_type: "code",
+          source: [
+            "# Import required libraries\n",
+            "import pandas as pd\n",
+            "import numpy as np\n",
+            "import matplotlib.pyplot as plt\n",
+            "import seaborn as sns\n",
+            "from datetime import datetime, timedelta\n",
+            "import warnings\n",
+            "warnings.filterwarnings('ignore')\n\n",
+            "# Set plotting style\n",
+            "plt.style.use('seaborn-v0_8')\n",
+            "sns.set_palette('husl')"
+          ],
+          execution_count: null,
+          outputs: [],
+          metadata: {}
+        },
+        {
+          cell_type: "code",
+          source: [
+            "# Generate sample sales data\n",
+            "np.random.seed(42)\n",
+            "start_date = datetime(2023, 1, 1)\n",
+            "end_date = datetime(2024, 12, 31)\n",
+            "date_range = pd.date_range(start=start_date, end=end_date, freq='D')\n\n",
+            "# Create sample data\n",
+            "sales_data = pd.DataFrame({\n",
+            "    'date': np.random.choice(date_range, 10000),\n",
+            "    'customer_id': np.random.randint(1000, 9999, 10000),\n",
+            "    'product_category': np.random.choice(['Electronics', 'Clothing', 'Home', 'Sports', 'Books'], 10000),\n",
+            "    'sales_amount': np.random.exponential(100, 10000),\n",
+            "    'quantity': np.random.randint(1, 10, 10000),\n",
+            "    'region': np.random.choice(['North', 'South', 'East', 'West'], 10000)\n",
+            "})\n\n",
+            "print(f\"Generated {len(sales_data)} sales records\")\n",
+            "print(sales_data.head())"
+          ],
+          execution_count: null,
+          outputs: [],
+          metadata: {}
+        },
+        {
+          cell_type: "code",
+          source: [
+            "# Data exploration\n",
+            "print(\"Sales Data Summary:\")\n",
+            "print(sales_data.describe())\n",
+            "print(\"\\nData Types:\")\n",
+            "print(sales_data.dtypes)\n",
+            "print(\"\\nMissing Values:\")\n",
+            "print(sales_data.isnull().sum())"
+          ],
+          execution_count: null,
+          outputs: [],
+          metadata: {}
+        },
+        {
+          cell_type: "code",
+          source: [
+            "# Sales trend analysis\n",
+            "daily_sales = sales_data.groupby('date')['sales_amount'].sum().reset_index()\n",
+            "daily_sales = daily_sales.sort_values('date')\n\n",
+            "plt.figure(figsize=(15, 6))\n",
+            "plt.plot(daily_sales['date'], daily_sales['sales_amount'], alpha=0.7)\n",
+            "plt.title('Daily Sales Trend')\n",
+            "plt.xlabel('Date')\n",
+            "plt.ylabel('Sales Amount')\n",
+            "plt.xticks(rotation=45)\n",
+            "plt.tight_layout()\n",
+            "plt.show()"
+          ],
+          execution_count: null,
+          outputs: [],
+          metadata: {}
+        },
+        {
+          cell_type: "code",
+          source: [
+            "# Category analysis\n",
+            "category_sales = sales_data.groupby('product_category')['sales_amount'].agg(['sum', 'mean', 'count'])\n",
+            "category_sales.columns = ['Total_Sales', 'Avg_Sales', 'Transaction_Count']\n",
+            "category_sales = category_sales.sort_values('Total_Sales', ascending=False)\n\n",
+            "fig, axes = plt.subplots(1, 2, figsize=(15, 6))\n",
+            "category_sales['Total_Sales'].plot(kind='bar', ax=axes[0], title='Total Sales by Category')\n",
+            "category_sales['Avg_Sales'].plot(kind='bar', ax=axes[1], title='Average Sales by Category')\n",
+            "plt.tight_layout()\n",
+            "plt.show()\n\n",
+            "print(category_sales)"
+          ],
+          execution_count: null,
+          outputs: [],
+          metadata: {}
+        }
+      ],
+      metadata: {
+        language_info: { name: "python" }
+      }
+    },
+    
+    nyc_taxi_analysis: {
+      nbformat: 4,
+      nbformat_minor: 5,
+      cells: [
+        {
+          cell_type: "markdown",
+          source: [
+            "# NYC Taxi Data Analysis\n\n",
+            "This notebook analyzes NYC taxi trip data including:\n",
+            "- Trip patterns and trends\n",
+            "- Fare analysis\n",
+            "- Geographic distribution\n",
+            "- Time-based patterns\n"
+          ],
+          metadata: {}
+        },
+        {
+          cell_type: "code",
+          source: [
+            "# Import required libraries\n",
+            "import pandas as pd\n",
+            "import numpy as np\n",
+            "import matplotlib.pyplot as plt\n",
+            "import seaborn as sns\n",
+            "from datetime import datetime, timedelta\n",
+            "import warnings\n",
+            "warnings.filterwarnings('ignore')\n\n",
+            "# Set plotting style\n",
+            "plt.style.use('seaborn-v0_8')\n",
+            "sns.set_palette('viridis')"
+          ],
+          execution_count: null,
+          outputs: [],
+          metadata: {}
+        },
+        {
+          cell_type: "code",
+          source: [
+            "# Generate sample NYC taxi data\n",
+            "np.random.seed(42)\n",
+            "n_trips = 50000\n\n",
+            "# NYC coordinates (approximately)\n",
+            "nyc_lat_min, nyc_lat_max = 40.4774, 40.9176\n",
+            "nyc_lon_min, nyc_lon_max = -74.2591, -73.7004\n\n",
+            "taxi_data = pd.DataFrame({\n",
+            "    'trip_id': range(1, n_trips + 1),\n",
+            "    'pickup_datetime': pd.date_range('2024-01-01', periods=n_trips, freq='5min'),\n",
+            "    'pickup_latitude': np.random.uniform(nyc_lat_min, nyc_lat_max, n_trips),\n",
+            "    'pickup_longitude': np.random.uniform(nyc_lon_min, nyc_lon_max, n_trips),\n",
+            "    'dropoff_latitude': np.random.uniform(nyc_lat_min, nyc_lat_max, n_trips),\n",
+            "    'dropoff_longitude': np.random.uniform(nyc_lon_min, nyc_lon_max, n_trips),\n",
+            "    'passenger_count': np.random.choice([1, 2, 3, 4, 5], n_trips, p=[0.5, 0.25, 0.15, 0.08, 0.02]),\n",
+            "    'trip_distance': np.random.exponential(3, n_trips),\n",
+            "    'fare_amount': np.random.exponential(15, n_trips) + 2.5,\n",
+            "    'tip_amount': np.random.exponential(3, n_trips),\n",
+            "    'payment_type': np.random.choice(['Credit', 'Cash'], n_trips, p=[0.7, 0.3])\n",
+            "})\n\n",
+            "# Add dropoff datetime based on trip distance\n",
+            "trip_duration_minutes = taxi_data['trip_distance'] * 3 + np.random.normal(5, 2, n_trips)\n",
+            "taxi_data['dropoff_datetime'] = taxi_data['pickup_datetime'] + pd.to_timedelta(trip_duration_minutes, unit='min')\n\n",
+            "print(f\"Generated {len(taxi_data)} taxi trip records\")\n",
+            "print(taxi_data.head())"
+          ],
+          execution_count: null,
+          outputs: [],
+          metadata: {}
+        },
+        {
+          cell_type: "code",
+          source: [
+            "# Data exploration\n",
+            "print(\"Taxi Data Summary:\")\n",
+            "print(taxi_data.describe())\n",
+            "print(\"\\nTrip Statistics:\")\n",
+            "print(f\"Average trip distance: {taxi_data['trip_distance'].mean():.2f} miles\")\n",
+            "print(f\"Average fare: ${taxi_data['fare_amount'].mean():.2f}\")\n",
+            "print(f\"Average tip: ${taxi_data['tip_amount'].mean():.2f}\")"
+          ],
+          execution_count: null,
+          outputs: [],
+          metadata: {}
+        },
+        {
+          cell_type: "code",
+          source: [
+            "# Time-based analysis\n",
+            "taxi_data['pickup_hour'] = taxi_data['pickup_datetime'].dt.hour\n",
+            "taxi_data['pickup_day'] = taxi_data['pickup_datetime'].dt.day_name()\n\n",
+            "fig, axes = plt.subplots(2, 2, figsize=(15, 12))\n\n",
+            "# Trips by hour\n",
+            "hourly_trips = taxi_data.groupby('pickup_hour').size()\n",
+            "hourly_trips.plot(kind='bar', ax=axes[0,0], title='Trips by Hour of Day')\n",
+            "axes[0,0].set_xlabel('Hour')\n",
+            "axes[0,0].set_ylabel('Number of Trips')\n\n",
+            "# Trips by day of week\n",
+            "daily_trips = taxi_data.groupby('pickup_day').size()\n",
+            "daily_trips.plot(kind='bar', ax=axes[0,1], title='Trips by Day of Week')\n",
+            "axes[0,1].set_xlabel('Day')\n",
+            "axes[0,1].set_ylabel('Number of Trips')\n\n",
+            "# Fare distribution\n",
+            "axes[1,0].hist(taxi_data['fare_amount'], bins=50, alpha=0.7)\n",
+            "axes[1,0].set_title('Fare Amount Distribution')\n",
+            "axes[1,0].set_xlabel('Fare Amount ($)')\n",
+            "axes[1,0].set_ylabel('Frequency')\n\n",
+            "# Distance vs Fare scatter\n",
+            "sample_data = taxi_data.sample(5000)  # Sample for better visualization\n",
+            "axes[1,1].scatter(sample_data['trip_distance'], sample_data['fare_amount'], alpha=0.5)\n",
+            "axes[1,1].set_title('Trip Distance vs Fare Amount')\n",
+            "axes[1,1].set_xlabel('Trip Distance (miles)')\n",
+            "axes[1,1].set_ylabel('Fare Amount ($)')\n\n",
+            "plt.tight_layout()\n",
+            "plt.show()"
+          ],
+          execution_count: null,
+          outputs: [],
+          metadata: {}
+        }
+      ],
+      metadata: {
+        language_info: { name: "python" }
+      }
+    },
+    
+    data_exploration: {
+      nbformat: 4,
+      nbformat_minor: 5,
+      cells: [
+        {
+          cell_type: "markdown",
+          source: [
+            "# Data Exploration Template\n\n",
+            "This notebook provides a structured approach to data exploration:\n",
+            "- Data loading and basic inspection\n",
+            "- Statistical summaries\n",
+            "- Data quality assessment\n",
+            "- Visualization and patterns\n"
+          ],
+          metadata: {}
+        },
+        {
+          cell_type: "code",
+          source: [
+            "# Import essential libraries for data exploration\n",
+            "import pandas as pd\n",
+            "import numpy as np\n",
+            "import matplotlib.pyplot as plt\n",
+            "import seaborn as sns\n",
+            "from scipy import stats\n",
+            "import warnings\n",
+            "warnings.filterwarnings('ignore')\n\n",
+            "# Configure display options\n",
+            "pd.set_option('display.max_columns', None)\n",
+            "pd.set_option('display.max_rows', 100)\n",
+            "plt.style.use('seaborn-v0_8')"
+          ],
+          execution_count: null,
+          outputs: [],
+          metadata: {}
+        },
+        {
+          cell_type: "code",
+          source: [
+            "# Load your dataset here\n",
+            "# df = pd.read_csv('your_data.csv')\n",
+            "# For demonstration, we'll create a sample dataset\n\n",
+            "np.random.seed(42)\n",
+            "df = pd.DataFrame({\n",
+            "    'feature_A': np.random.normal(100, 15, 1000),\n",
+            "    'feature_B': np.random.exponential(2, 1000),\n",
+            "    'feature_C': np.random.choice(['Category_1', 'Category_2', 'Category_3'], 1000),\n",
+            "    'feature_D': np.random.uniform(0, 100, 1000),\n",
+            "    'target': np.random.choice([0, 1], 1000, p=[0.7, 0.3])\n",
+            "})\n\n",
+            "print(f\"Dataset shape: {df.shape}\")\n",
+            "print(f\"\\nFirst 5 rows:\")\n",
+            "display(df.head())"
+          ],
+          execution_count: null,
+          outputs: [],
+          metadata: {}
+        },
+        {
+          cell_type: "code",
+          source: [
+            "# Basic data inspection\n",
+            "print(\"Dataset Info:\")\n",
+            "print(df.info())\n",
+            "print(\"\\nStatistical Summary:\")\n",
+            "display(df.describe())\n",
+            "print(\"\\nMissing Values:\")\n",
+            "print(df.isnull().sum())\n",
+            "print(\"\\nDuplicate Rows:\")\n",
+            "print(f\"Number of duplicates: {df.duplicated().sum()}\")"
+          ],
+          execution_count: null,
+          outputs: [],
+          metadata: {}
+        }
+      ],
+      metadata: {
+        language_info: { name: "python" }
+      }
+    },
+    
+    machine_learning: {
+      nbformat: 4,
+      nbformat_minor: 5,
+      cells: [
+        {
+          cell_type: "markdown",
+          source: [
+            "# Machine Learning Template\n\n",
+            "This notebook provides a complete ML workflow:\n",
+            "- Data preprocessing\n",
+            "- Feature engineering\n",
+            "- Model training and evaluation\n",
+            "- Hyperparameter tuning\n",
+            "- Model interpretation\n"
+          ],
+          metadata: {}
+        },
+        {
+          cell_type: "code",
+          source: [
+            "# Import ML libraries\n",
+            "import pandas as pd\n",
+            "import numpy as np\n",
+            "import matplotlib.pyplot as plt\n",
+            "import seaborn as sns\n\n",
+            "from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV\n",
+            "from sklearn.preprocessing import StandardScaler, LabelEncoder\n",
+            "from sklearn.ensemble import RandomForestClassifier\n",
+            "from sklearn.linear_model import LogisticRegression\n",
+            "from sklearn.metrics import classification_report, confusion_matrix, roc_auc_score\n",
+            "from sklearn.pipeline import Pipeline\n\n",
+            "import warnings\n",
+            "warnings.filterwarnings('ignore')"
+          ],
+          execution_count: null,
+          outputs: [],
+          metadata: {}
+        },
+        {
+          cell_type: "code",
+          source: [
+            "# Create sample dataset for ML demonstration\n",
+            "np.random.seed(42)\n",
+            "n_samples = 2000\n\n",
+            "# Generate features\n",
+            "df = pd.DataFrame({\n",
+            "    'feature_1': np.random.normal(0, 1, n_samples),\n",
+            "    'feature_2': np.random.normal(0, 1, n_samples),\n",
+            "    'feature_3': np.random.exponential(1, n_samples),\n",
+            "    'feature_4': np.random.uniform(-2, 2, n_samples),\n",
+            "    'category': np.random.choice(['A', 'B', 'C'], n_samples)\n",
+            "})\n\n",
+            "# Create target variable with some relationship to features\n",
+            "df['target'] = ((df['feature_1'] + df['feature_2'] > 0) & \n",
+            "               (df['feature_3'] < 2)).astype(int)\n\n",
+            "print(f\"Dataset shape: {df.shape}\")\n",
+            "print(f\"Target distribution: {df['target'].value_counts()}\")\n",
+            "display(df.head())"
+          ],
+          execution_count: null,
+          outputs: [],
+          metadata: {}
+        },
+        {
+          cell_type: "code",
+          source: [
+            "# Exploratory Data Analysis\n",
+            "fig, axes = plt.subplots(2, 3, figsize=(18, 12))\n",
+            "axes = axes.ravel()\n\n",
+            "# Feature distributions\n",
+            "numerical_features = ['feature_1', 'feature_2', 'feature_3', 'feature_4']\n",
+            "for i, feature in enumerate(numerical_features):\n",
+            "    axes[i].hist(df[feature], bins=30, alpha=0.7)\n",
+            "    axes[i].set_title(f'Distribution of {feature}')\n",
+            "    axes[i].set_xlabel(feature)\n",
+            "    axes[i].set_ylabel('Frequency')\n\n",
+            "# Category distribution\n",
+            "df['category'].value_counts().plot(kind='bar', ax=axes[4], title='Category Distribution')\n",
+            "axes[4].set_xlabel('Category')\n",
+            "axes[4].set_ylabel('Count')\n\n",
+            "# Target distribution\n",
+            "df['target'].value_counts().plot(kind='bar', ax=axes[5], title='Target Distribution')\n",
+            "axes[5].set_xlabel('Target')\n",
+            "axes[5].set_ylabel('Count')\n\n",
+            "plt.tight_layout()\n",
+            "plt.show()"
+          ],
+          execution_count: null,
+          outputs: [],
+          metadata: {}
+        }
+      ],
+      metadata: {
+        language_info: { name: "python" }
+      }
+    }
+  };
+  
+  return templates[template as keyof typeof templates] || templates.blank;
+}
+
 /**
  * Helper function to handle API calls with enhanced authentication support.
  * @param bearerToken - Bearer token for authentication (optional if using env auth)
@@ -1355,3 +1883,252 @@ main().catch((error) => {
   console.error("Fatal error in main():", error);
   process.exit(1);
 });
+
+// ==================== NOTEBOOK MANAGEMENT TOOLS ====================
+
+server.tool(
+  "create-fabric-notebook",
+  "Create a new Fabric notebook from template or custom definition",
+  CreateNotebookFromTemplateSchema.shape,
+  async ({ bearerToken, workspaceId, displayName, template, customNotebook, environmentId, lakehouseId, lakehouseName }) => {
+    // Get the notebook definition from template or custom
+    let notebookDefinition;
+    if (template === "custom") {
+      if (!customNotebook) {
+        return {
+          content: [{ type: "text", text: "Error: customNotebook is required when template is 'custom'" }]
+        };
+      }
+      notebookDefinition = customNotebook;
+    } else {
+      notebookDefinition = getNotebookTemplate(template);
+    }
+
+    // Enhance metadata with dependencies if provided
+    if (environmentId || lakehouseId) {
+      if (!notebookDefinition.metadata) {
+        notebookDefinition.metadata = {};
+      }
+      if (!notebookDefinition.metadata.dependencies) {
+        notebookDefinition.metadata.dependencies = {};
+      }
+      
+      if (environmentId) {
+        notebookDefinition.metadata.dependencies.environment = {
+          environmentId,
+          workspaceId
+        };
+      }
+      
+      if (lakehouseId) {
+        notebookDefinition.metadata.dependencies.lakehouse = {
+          default_lakehouse: lakehouseId,
+          default_lakehouse_name: lakehouseName || "Default Lakehouse",
+          default_lakehouse_workspace_id: workspaceId
+        };
+      }
+    }
+
+    // Encode notebook definition as base64
+    const notebookContent = JSON.stringify(notebookDefinition);
+    const base64Content = Buffer.from(notebookContent).toString('base64');
+
+    const result = await executeApiCall(
+      bearerToken,
+      workspaceId,
+      "create-notebook",
+      (client) => client.createNotebook({
+        displayName,
+        type: "Notebook",
+        definition: {
+          format: "ipynb",
+          parts: [
+            {
+              path: "notebook-content.ipynb",
+              payload: base64Content,
+              payloadType: "InlineBase64"
+            }
+          ]
+        }
+      }),
+      { displayName, template, notebookDefinition }
+    );
+
+    if (result.status === 'error') {
+      return {
+        content: [{ type: "text", text: `Error creating notebook: ${result.error}` }]
+      };
+    }
+
+    return {
+      content: [{
+        type: "text",
+        text: `Successfully created notebook: "${displayName}"\nID: ${result.data?.id}\nTemplate: ${template}\nCreated: ${result.data?.createdDate}`
+
+      }]
+    };
+  }
+);
+
+server.tool(
+  "get-fabric-notebook-definition",
+  "Get the notebook definition (cells, metadata) from an existing Fabric notebook",
+  GetNotebookDefinitionSchema.shape,
+  async ({ bearerToken, workspaceId, notebookId, format }) => {
+    const result = await executeApiCall(
+      bearerToken,
+      workspaceId,
+      "get-notebook-definition",
+      (client) => client.getItemDefinition(notebookId, format),
+      { notebookId, format }
+    );
+
+    if (result.status === 'error') {
+      return {
+        content: [{ type: "text", text: `Error getting notebook definition: ${result.error}` }]
+      };
+    }
+
+    try {
+      // Parse the notebook content
+      let notebookContent = "";
+      const responseData = result.data as any;
+      if (responseData?.definition?.parts && responseData.definition.parts.length > 0) {
+        const part = responseData.definition.parts[0];
+        if (part.payloadType === "InlineBase64" && part.payload) {
+          notebookContent = Buffer.from(part.payload, 'base64').toString('utf-8');
+        } else {
+          notebookContent = part.payload || "{}";
+        }
+      }
+
+      const notebookDef = JSON.parse(notebookContent || "{}");
+      
+      return {
+        content: [{
+          type: "text",
+          text: `Notebook Definition Retrieved:\n\nName: ${responseData?.displayName || 'Unknown'}\nFormat: ${format}\nCells: ${notebookDef.cells?.length || 0}\n\nDefinition:\n${JSON.stringify(notebookDef, null, 2)}`
+        }]
+      };
+    } catch (parseError) {
+      return {
+        content: [{ type: "text", text: `Error parsing notebook definition: ${parseError}` }]
+      };
+    }
+  }
+);
+
+server.tool(
+  "update-fabric-notebook-definition",
+  "Update the notebook definition (cells, metadata) of an existing Fabric notebook",
+  UpdateNotebookDefinitionSchema.shape,
+  async ({ bearerToken, workspaceId, notebookId, notebookDefinition }) => {
+    // Encode updated notebook definition as base64
+    const notebookContent = JSON.stringify(notebookDefinition);
+    const base64Content = Buffer.from(notebookContent).toString('base64');
+
+    const result = await executeApiCall(
+      bearerToken,
+      workspaceId,
+      "update-notebook-definition",
+      (client) => client.updateItemDefinition(notebookId, {
+        format: "ipynb",
+        parts: [
+          {
+            path: "notebook-content.ipynb",
+            payload: base64Content,
+            payloadType: "InlineBase64"
+          }
+        ]
+      }),
+      { notebookId, notebookDefinition }
+    );
+
+    if (result.status === 'error') {
+      return {
+        content: [{ type: "text", text: `Error updating notebook definition: ${result.error}` }]
+      };
+    }
+
+    return {
+      content: [{
+        type: "text",
+        text: `Successfully updated notebook definition for notebook ID: ${notebookId}\nCells: ${notebookDefinition.cells?.length || 0}\nUpdated: ${new Date().toISOString()}`
+      }]
+    };
+  }
+);
+
+server.tool(
+  "run-fabric-notebook",
+  "Execute a Fabric notebook on-demand with optional parameters and configuration",
+  RunNotebookSchema.shape,
+  async ({ bearerToken, workspaceId, notebookId, parameters, configuration }) => {
+    const executionPayload: any = {
+      notebookId
+    };
+
+    // Add parameters if provided
+    if (parameters && Object.keys(parameters).length > 0) {
+      executionPayload.parameters = {};
+      for (const [key, param] of Object.entries(parameters)) {
+        executionPayload.parameters[key] = {
+          value: param.value,
+          type: param.type
+        };
+      }
+    }
+
+    // Add configuration if provided
+    if (configuration) {
+      executionPayload.executionData = {};
+      
+      if (configuration.conf) {
+        executionPayload.executionData.conf = configuration.conf;
+      }
+      
+      if (configuration.environment) {
+        executionPayload.executionData.environmentId = {
+          environmentId: configuration.environment.id,
+          workspaceId
+        };
+      }
+      
+      if (configuration.defaultLakehouse) {
+        executionPayload.executionData.defaultLakehouseId = {
+          lakehouseId: configuration.defaultLakehouse.id,
+          workspaceId: configuration.defaultLakehouse.workspaceId || workspaceId
+        };
+      }
+      
+      if (configuration.useStarterPool) {
+        executionPayload.executionData.useStarterPool = true;
+      }
+      
+      if (configuration.useWorkspacePool) {
+        executionPayload.executionData.useWorkspacePool = configuration.useWorkspacePool;
+      }
+    }
+
+    const result = await executeApiCall(
+      bearerToken,
+      workspaceId,
+      "run-notebook",
+      (client) => client.runNotebook(notebookId, executionPayload),
+      { notebookId, executionPayload }
+    );
+
+    if (result.status === 'error') {
+      return {
+        content: [{ type: "text", text: `Error running notebook: ${result.error}` }]
+      };
+    }
+
+    return {
+      content: [{
+        type: "text",
+        text: `Successfully started notebook execution:\nNotebook ID: ${notebookId}\nJob ID: ${(result.data as any)?.id || 'N/A'}\nStatus: ${(result.data as any)?.status || 'Started'}\nStarted: ${new Date().toISOString()}`
+      }]
+    };
+  }
+);
