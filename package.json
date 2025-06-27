@@ -14,9 +14,11 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
+    "test:pre-push": "node test-before-push.js",
+    "validate": "node validate.js",
+    "final-check": "node final-check.js",
     "lint": "eslint src/**/*.ts",
     "lint:fix": "eslint src/**/*.ts --fix",
-    "prepare": "npm run build",
     "docker:build": "docker build -t fabric-analytics-mcp .",
     "docker:run": "docker run -p 3000:3000 --env-file .env fabric-analytics-mcp",
     "docker:push": "./scripts/build-and-push.sh",
@@ -59,7 +61,13 @@
     "SECURITY.md"
   ],
   "devDependencies": {
+    "@types/jest": "^30.0.0",
     "@types/node": "^24.0.3",
+    "@typescript-eslint/eslint-plugin": "^8.35.0",
+    "@typescript-eslint/parser": "^8.35.0",
+    "eslint": "^9.29.0",
+    "jest": "^30.0.3",
+    "ts-jest": "^29.4.0",
     "typescript": "^5.8.3"
   },
   "dependencies": {

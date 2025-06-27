@@ -1,9 +1,9 @@
-import { describe, it, expect, beforeEach } from 'jest';
-import { FabricApiClient } from '../src/fabric-client';
-import { SimulationService } from '../src/simulation-service';
+import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { FabricApiClient } from '../src/fabric-client.js';
 
 // Mock fetch for testing
-global.fetch = jest.fn();
+const mockFetch = jest.fn() as jest.MockedFunction<typeof fetch>;
+global.fetch = mockFetch;
 
 describe('FabricApiClient', () => {
   let client: FabricApiClient;
