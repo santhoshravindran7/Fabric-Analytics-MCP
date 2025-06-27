@@ -1,8 +1,6 @@
 # Docker Compose for Microsoft Fabric Analytics MCP Server
 # Provides local development and testing environment
 
-version: '3.8'
-
 services:
   # Main MCP Server
   fabric-mcp:
