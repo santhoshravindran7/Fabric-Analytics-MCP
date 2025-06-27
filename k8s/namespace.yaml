@@ -1,0 +1,54 @@
+# Kubernetes Namespace for Microsoft Fabric Analytics MCP Server
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: fabric-mcp
+  labels:
+    name: fabric-mcp
+    app: fabric-analytics-mcp
+    version: v1
+  annotations:
+    description: "Microsoft Fabric Analytics MCP Server namespace"
+---
+# Resource Quota to control resource usage
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: fabric-mcp-quota
+  namespace: fabric-mcp
+spec:
+  hard:
+    requests.cpu: "4"
+    requests.memory: 8Gi
+    limits.cpu: "8"
+    limits.memory: 16Gi
+    pods: "20"
+    services: "5"
+    persistentvolumeclaims: "2"
+---
+# Network Policy for security isolation
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: fabric-mcp-network-policy
+  namespace: fabric-mcp
+spec:
+  podSelector:
+    matchLabels:
+      app: fabric-analytics-mcp
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: TCP
+      port: 3000
+  egress:
+  - {} # Allow all egress traffic (needed for Microsoft Fabric API calls)

@@ -12,7 +12,13 @@
     "dev": "tsc --watch",
     "start": "node build/index.js",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "prepare": "npm run build"
+    "prepare": "npm run build",
+    "docker:build": "docker build -t fabric-analytics-mcp .",
+    "docker:run": "docker run -p 3000:3000 --env-file .env fabric-analytics-mcp",
+    "docker:push": "./scripts/build-and-push.sh",
+    "k8s:deploy": "./scripts/deploy-to-aks.sh",
+    "azure:setup": "./scripts/setup-azure-resources.sh",
+    "health:check": "curl -f http://localhost:3000/health || exit 1"
   },
   "keywords": [
     "mcp",
