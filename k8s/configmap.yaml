@@ -1,0 +1,39 @@
+# ConfigMap for Microsoft Fabric Analytics MCP Server Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fabric-mcp-config
+  namespace: fabric-mcp
+  labels:
+    app: fabric-analytics-mcp
+data:
+  # Application configuration
+  NODE_ENV: "production"
+  PORT: "3000"
+  LOG_LEVEL: "info"
+  
+  # MCP Server configuration
+  MCP_SERVER_NAME: "fabric-analytics"
+  MCP_SERVER_VERSION: "1.0.0"
+  
+  # Microsoft Fabric API configuration
+  FABRIC_API_BASE_URL: "https://api.fabric.microsoft.com"
+  FABRIC_API_VERSION: "v1"
+  
+  # Performance and scaling configuration
+  MAX_CONCURRENT_REQUESTS: "100"
+  REQUEST_TIMEOUT: "30000"
+  ENABLE_REQUEST_LOGGING: "true"
+  
+  # Health check configuration
+  HEALTH_CHECK_ENDPOINT: "/health"
+  READINESS_CHECK_ENDPOINT: "/ready"
+  
+  # Monitoring configuration
+  ENABLE_METRICS: "true"
+  METRICS_ENDPOINT: "/metrics"
+  
+  # Security configuration
+  ENABLE_CORS: "true"
+  CORS_ORIGIN: "*"
+  ENABLE_HELMET: "true"

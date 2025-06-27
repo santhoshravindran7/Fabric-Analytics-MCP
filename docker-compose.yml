@@ -1,0 +1,167 @@
+# Docker Compose for Microsoft Fabric Analytics MCP Server
+# Provides local development and testing environment
+
+version: '3.8'
+
+services:
+  # Main MCP Server
+  fabric-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - LOG_LEVEL=info
+      - ENABLE_HEALTH_SERVER=true
+      
+      # Authentication configuration
+      - FABRIC_AUTH_METHOD=${FABRIC_AUTH_METHOD:-service_principal}
+      - FABRIC_CLIENT_ID=${FABRIC_CLIENT_ID}
+      - FABRIC_CLIENT_SECRET=${FABRIC_CLIENT_SECRET}
+      - FABRIC_TENANT_ID=${FABRIC_TENANT_ID}
+      - FABRIC_DEFAULT_WORKSPACE_ID=${FABRIC_DEFAULT_WORKSPACE_ID}
+      
+      # API configuration
+      - FABRIC_API_BASE_URL=https://api.fabric.microsoft.com
+      - FABRIC_API_VERSION=v1
+      
+      # Performance settings
+      - MAX_CONCURRENT_REQUESTS=100
+      - REQUEST_TIMEOUT=30000
+      - ENABLE_REQUEST_LOGGING=true
+      
+      # Health check configuration
+      - HEALTH_CHECK_ENDPOINT=/health
+      - READINESS_CHECK_ENDPOINT=/ready
+      - METRICS_ENDPOINT=/metrics
+      
+      # Security settings
+      - ENABLE_CORS=true
+      - CORS_ORIGIN=*
+      - ENABLE_HELMET=true
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    restart: unless-stopped
+    
+    volumes:
+      # Mount logs directory for persistence
+      - ./logs:/app/logs
+    
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.fabric-mcp.rule=Host(`mcp.localhost`)"
+      - "traefik.http.routers.fabric-mcp.entrypoints=web"
+      - "traefik.http.services.fabric-mcp.loadbalancer.server.port=3000"
+
+  # Redis for caching (optional)
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  # Traefik reverse proxy (optional)
+  traefik:
+    image: traefik:v3.0
+    ports:
+      - "80:80"
+      - "8080:8080"  # Traefik dashboard
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--accesslog=true"
+      - "--log.level=INFO"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    restart: unless-stopped
+    profiles:
+      - "reverse-proxy"
+
+  # Prometheus for metrics collection (optional)
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    restart: unless-stopped
+    profiles:
+      - "monitoring"
+
+  # Grafana for metrics visualization (optional)
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources
+    restart: unless-stopped
+    profiles:
+      - "monitoring"
+    depends_on:
+      - prometheus
+
+  # Node Exporter for system metrics (optional)
+  node-exporter:
+    image: prom/node-exporter:latest
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    restart: unless-stopped
+    profiles:
+      - "monitoring"
+
+volumes:
+  redis_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+
+networks:
+  default:
+    name: fabric-mcp-network
+    driver: bridge

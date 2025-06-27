@@ -1,0 +1,66 @@
+# Service for Microsoft Fabric Analytics MCP Server
+apiVersion: v1
+kind: Service
+metadata:
+  name: fabric-analytics-mcp-service
+  namespace: fabric-mcp
+  labels:
+    app: fabric-analytics-mcp
+  annotations:
+    service.beta.kubernetes.io/azure-load-balancer-resource-group: "your-node-resource-group"
+    service.beta.kubernetes.io/azure-dns-label-name: "fabric-mcp"
+spec:
+  type: LoadBalancer
+  selector:
+    app: fabric-analytics-mcp
+  ports:
+  - name: http
+    port: 80
+    targetPort: 3000
+    protocol: TCP
+  - name: https
+    port: 443
+    targetPort: 3000
+    protocol: TCP
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800
+---
+# ClusterIP Service for internal communication
+apiVersion: v1
+kind: Service
+metadata:
+  name: fabric-analytics-mcp-internal
+  namespace: fabric-mcp
+  labels:
+    app: fabric-analytics-mcp
+    service-type: internal
+spec:
+  type: ClusterIP
+  selector:
+    app: fabric-analytics-mcp
+  ports:
+  - name: http
+    port: 3000
+    targetPort: 3000
+    protocol: TCP
+---
+# Headless Service for StatefulSet support (if needed)
+apiVersion: v1
+kind: Service
+metadata:
+  name: fabric-analytics-mcp-headless
+  namespace: fabric-mcp
+  labels:
+    app: fabric-analytics-mcp
+    service-type: headless
+spec:
+  clusterIP: None
+  selector:
+    app: fabric-analytics-mcp
+  ports:
+  - name: http
+    port: 3000
+    targetPort: 3000
+    protocol: TCP

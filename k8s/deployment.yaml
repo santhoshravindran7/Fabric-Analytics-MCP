@@ -1,0 +1,172 @@
+# Deployment for Microsoft Fabric Analytics MCP Server
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fabric-analytics-mcp
+  namespace: fabric-mcp
+  labels:
+    app: fabric-analytics-mcp
+    version: v1
+  annotations:
+    deployment.kubernetes.io/revision: "1"
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 2
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: fabric-analytics-mcp
+  template:
+    metadata:
+      labels:
+        app: fabric-analytics-mcp
+        version: v1
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "3000"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: fabric-mcp-service-account
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: fabric-analytics-mcp
+        image: your-acr-registry.azurecr.io/fabric-analytics-mcp:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3000
+          name: http
+          protocol: TCP
+        
+        # Environment variables from ConfigMap
+        envFrom:
+        - configMapRef:
+            name: fabric-mcp-config
+        
+        # Sensitive environment variables from Secret
+        env:
+        - name: FABRIC_AUTH_METHOD
+          value: "service_principal"
+        - name: FABRIC_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: fabric-mcp-secrets
+              key: FABRIC_CLIENT_ID
+        - name: FABRIC_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: fabric-mcp-secrets
+              key: FABRIC_CLIENT_SECRET
+        - name: FABRIC_TENANT_ID
+          valueFrom:
+            secretKeyRef:
+              name: fabric-mcp-secrets
+              key: FABRIC_TENANT_ID
+        - name: FABRIC_DEFAULT_WORKSPACE_ID
+          valueFrom:
+            secretKeyRef:
+              name: fabric-mcp-secrets
+              key: FABRIC_DEFAULT_WORKSPACE_ID
+              optional: true
+        
+        # Resource limits and requests
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        
+        # Security context
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1001
+          capabilities:
+            drop:
+            - ALL
+        
+        # Liveness probe
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+            scheme: HTTP
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
+        
+        # Readiness probe
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 3000
+            scheme: HTTP
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          successThreshold: 1
+          failureThreshold: 3
+        
+        # Startup probe
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 3000
+            scheme: HTTP
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 3
+          successThreshold: 1
+          failureThreshold: 30
+        
+        # Volume mounts for temporary files
+        volumeMounts:
+        - name: tmp-volume
+          mountPath: /tmp
+        - name: cache-volume
+          mountPath: /app/.cache
+      
+      # Volumes
+      volumes:
+      - name: tmp-volume
+        emptyDir: {}
+      - name: cache-volume
+        emptyDir: {}
+      
+      # Pod affinity for better distribution
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app: fabric-analytics-mcp
+              topologyKey: kubernetes.io/hostname
+      
+      # Tolerations for node taints
+      tolerations:
+      - key: "node.kubernetes.io/not-ready"
+        operator: "Exists"
+        effect: "NoExecute"
+        tolerationSeconds: 300
+      - key: "node.kubernetes.io/unreachable"
+        operator: "Exists"
+        effect: "NoExecute"
+        tolerationSeconds: 300
+      
+      # Termination grace period
+      terminationGracePeriodSeconds: 30

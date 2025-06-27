@@ -1,0 +1,156 @@
+# RBAC Configuration for Microsoft Fabric Analytics MCP Server
+# Service Account
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: fabric-mcp-service-account
+  namespace: fabric-mcp
+  labels:
+    app: fabric-analytics-mcp
+  annotations:
+    # Azure Workload Identity (if using Azure AD Pod Identity)
+    azure.workload.identity/client-id: "your-managed-identity-client-id"
+    azure.workload.identity/tenant-id: "your-tenant-id"
+automountServiceAccountToken: true
+---
+# Cluster Role for minimal required permissions
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: fabric-mcp-cluster-role
+  labels:
+    app: fabric-analytics-mcp
+rules:
+# Minimal permissions for health checks and metrics
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list"]
+- apiGroups: ["apps"]
+  resources: ["deployments"]
+  verbs: ["get", "list"]
+# Permissions for service mesh integration (if using Istio/Linkerd)
+- apiGroups: ["networking.istio.io"]
+  resources: ["virtualservices", "destinationrules"]
+  verbs: ["get", "list"]
+---
+# Role for namespace-specific permissions
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: fabric-mcp
+  name: fabric-mcp-role
+  labels:
+    app: fabric-analytics-mcp
+rules:
+# ConfigMap access for dynamic configuration
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list", "watch"]
+# Secret access for credential management
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list"]
+# Pod access for self-monitoring
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "watch"]
+# Service access for service discovery
+- apiGroups: [""]
+  resources: ["services"]
+  verbs: ["get", "list"]
+# Events for troubleshooting
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create", "patch"]
+---
+# Cluster Role Binding
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: fabric-mcp-cluster-role-binding
+  labels:
+    app: fabric-analytics-mcp
+subjects:
+- kind: ServiceAccount
+  name: fabric-mcp-service-account
+  namespace: fabric-mcp
+roleRef:
+  kind: ClusterRole
+  name: fabric-mcp-cluster-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# Role Binding for namespace permissions
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: fabric-mcp-role-binding
+  namespace: fabric-mcp
+  labels:
+    app: fabric-analytics-mcp
+subjects:
+- kind: ServiceAccount
+  name: fabric-mcp-service-account
+  namespace: fabric-mcp
+roleRef:
+  kind: Role
+  name: fabric-mcp-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# Pod Security Policy (if PSP is enabled)
+apiVersion: policy/v1beta1
+kind: PodSecurityPolicy
+metadata:
+  name: fabric-mcp-psp
+  labels:
+    app: fabric-analytics-mcp
+spec:
+  privileged: false
+  allowPrivilegeEscalation: false
+  requiredDropCapabilities:
+    - ALL
+  volumes:
+    - 'configMap'
+    - 'emptyDir'
+    - 'projected'
+    - 'secret'
+    - 'downwardAPI'
+    - 'persistentVolumeClaim'
+  runAsUser:
+    rule: 'MustRunAsNonRoot'
+  runAsGroup:
+    rule: 'MustRunAs'
+    ranges:
+      - min: 1001
+        max: 1001
+  seLinux:
+    rule: 'RunAsAny'
+  fsGroup:
+    rule: 'RunAsAny'
+  readOnlyRootFilesystem: true
+---
+# Security Context Constraints (for OpenShift)
+apiVersion: security.openshift.io/v1
+kind: SecurityContextConstraints
+metadata:
+  name: fabric-mcp-scc
+  labels:
+    app: fabric-analytics-mcp
+allowHostDirVolumePlugin: false
+allowHostIPC: false
+allowHostNetwork: false
+allowHostPID: false
+allowHostPorts: false
+allowPrivilegedContainer: false
+allowedCapabilities: []
+defaultAddCapabilities: []
+fsGroup:
+  type: RunAsAny
+readOnlyRootFilesystem: true
+requiredDropCapabilities:
+- ALL
+runAsUser:
+  type: MustRunAsNonRoot
+seLinuxContext:
+  type: RunAsAny
+users:
+- system:serviceaccount:fabric-mcp:fabric-mcp-service-account

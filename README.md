@@ -36,6 +36,50 @@ A comprehensive Model Context Protocol (MCP) server that provides analytics capa
 - **📈 Analytics & Insights** - Generate comprehensive monitoring dashboards
 - **🧪 Comprehensive Testing** - Extensive test suite with real API validation
 - **🔄 Token Management** - Automatic token validation and expiration handling
+- **☸️ Enterprise Deployment** - Full Kubernetes and Azure deployment support
+- **🔄 Docker Support** - Containerized deployment with health checks
+- **📊 Monitoring & Observability** - Built-in Prometheus metrics and Grafana dashboards
+- **🚀 Azure MCP Server** - Native Azure hosting option (preview)
+
+## 🚀 **Deployment Options**
+
+### **📱 Local Development**
+```bash
+# Clone and run locally
+git clone https://github.com/santhoshravindran7/Fabric-Analytics-MCP.git
+cd Fabric-Analytics-MCP
+npm install && npm run build && npm start
+```
+
+### **🐳 Docker Deployment**
+```bash
+# Using Docker Compose
+docker-compose up -d
+
+# Or standalone Docker
+docker build -t fabric-analytics-mcp .
+docker run -p 3000:3000 -e FABRIC_CLIENT_ID=xxx fabric-analytics-mcp
+```
+
+### **☸️ Azure Kubernetes Service (AKS)**
+```bash
+# One-command enterprise deployment
+export ACR_NAME="your-registry" FABRIC_CLIENT_ID="xxx" FABRIC_CLIENT_SECRET="yyy" FABRIC_TENANT_ID="zzz"
+./scripts/setup-azure-resources.sh && ./scripts/build-and-push.sh && ./scripts/deploy-to-aks.sh
+```
+
+### **🌐 Azure MCP Server (Preview)**
+```bash
+# Serverless deployment on Azure
+az mcp server create --name "fabric-analytics-mcp" --repository "santhoshravindran7/Fabric-Analytics-MCP"
+```
+
+**📚 Detailed Guides**:
+- [🐳 Docker & Compose Setup](./docker-compose.yml)
+- [☸️ AKS Deployment Guide](./AKS_DEPLOYMENT.md)
+- [🌐 Azure MCP Server Guide](./AZURE_MCP_SERVER.md)
+- [🔧 Configuration Examples](./.env.example)
+- [✅ Deployment Validation](./scripts/validate-deployment.sh)
 
 ## 🛠️ **Tools & Capabilities**
 
@@ -509,6 +553,166 @@ Check your authentication status:
 - All tokens are automatically validated and include expiration checking
 
 **Note**: The MCP server seamlessly handles token validation and provides clear error messages for authentication issues.
+
+## ☸️ **Azure Kubernetes Service (AKS) Deployment**
+
+Deploy the MCP server as a scalable service on Azure Kubernetes Service for enterprise production use.
+
+### **🚀 Quick AKS Deployment**
+
+#### **Prerequisites**
+- Azure CLI installed and configured
+- Docker installed
+- kubectl installed
+- Azure subscription with AKS permissions
+
+#### **1. Build and Push Docker Image**
+```bash
+# Build the Docker image
+npm run docker:build
+
+# Tag and push to Azure Container Registry
+npm run docker:push
+```
+
+#### **2. Deploy to AKS**
+```bash
+# Create Azure resources and deploy
+./scripts/deploy-to-aks.sh
+```
+
+#### **3. Access the MCP Server**
+Once deployed, your MCP server will be available at:
+```
+https://your-aks-cluster.region.cloudapp.azure.com/mcp
+```
+
+### **🏗️ Architecture Overview**
+
+The AKS deployment includes:
+- **Horizontal Pod Autoscaler** (3-10 pods based on CPU/memory)
+- **Azure Load Balancer** for high availability
+- **SSL/TLS termination** with Azure Application Gateway
+- **ConfigMaps** for environment configuration
+- **Secrets** for secure credential storage
+- **Health checks** and readiness probes
+- **Resource limits** and quality of service guarantees
+
+### **📁 Deployment Files**
+
+All Kubernetes manifests are located in the `/k8s` directory:
+- `namespace.yaml` - Dedicated namespace
+- `deployment.yaml` - Application deployment with scaling
+- `service.yaml` - Load balancer service
+- `ingress.yaml` - External access and SSL
+- `configmap.yaml` - Configuration management
+- `secret.yaml` - Secure credential storage
+- `hpa.yaml` - Horizontal Pod Autoscaler
+
+### **🔧 Configuration**
+
+Configure the deployment by setting these environment variables:
+```bash
+export AZURE_SUBSCRIPTION_ID="your-subscription-id"
+export AZURE_RESOURCE_GROUP="fabric-mcp-rg"
+export AKS_CLUSTER_NAME="fabric-mcp-cluster"
+export ACR_NAME="fabricmcpregistry"
+export DOMAIN_NAME="your-domain.com"
+```
+
+### **🔐 Production Security**
+
+The AKS deployment includes enterprise-grade security:
+- **Non-root container** execution
+- **Read-only root filesystem**
+- **Secret management** via Azure Key Vault integration
+- **Network policies** for traffic isolation
+- **RBAC** with minimal required permissions
+- **Pod security standards** enforcement
+
+### **📊 Monitoring & Scaling**
+
+- **Azure Monitor** integration for logs and metrics
+- **Application Insights** for performance monitoring
+- **Prometheus** metrics endpoint for custom monitoring
+- **Auto-scaling** based on CPU (70%) and memory (80%) thresholds
+- **Health checks** for automatic pod restart
+
+### **🔄 CI/CD Integration**
+
+The deployment scripts support:
+- **Azure DevOps** pipelines
+- **GitHub Actions** workflows
+- **Automated testing** before deployment
+- **Blue-green deployments** for zero downtime
+- **Rollback capabilities** for quick recovery
+
+**📚 Detailed Guide**: See [AKS_DEPLOYMENT.md](AKS_DEPLOYMENT.md) for complete setup instructions.
+
+## 🌐 **Azure Model Context Protocol Server (Preview)**
+
+Microsoft Azure now offers a preview service for hosting MCP servers natively. This eliminates the need for custom infrastructure management.
+
+### **🚀 Azure MCP Server Deployment**
+
+#### **Prerequisites**
+- Azure subscription with MCP preview access
+- Azure CLI with MCP extensions
+
+#### **Deploy to Azure MCP Service**
+```bash
+# Login to Azure
+az login
+
+# Enable MCP preview features
+az extension add --name mcp-preview
+
+# Deploy the MCP server
+az mcp server create \
+  --name "fabric-analytics-mcp" \
+  --resource-group "your-rg" \
+  --source-type "github" \
+  --repository "santhoshravindran7/Fabric-Analytics-MCP" \
+  --branch "main" \
+  --auth-method "service-principal"
+```
+
+#### **Configure Authentication**
+```bash
+# Set up service principal authentication
+az mcp server config set \
+  --name "fabric-analytics-mcp" \
+  --setting "FABRIC_CLIENT_ID=your-client-id" \
+  --setting "FABRIC_CLIENT_SECRET=your-secret" \
+  --setting "FABRIC_TENANT_ID=your-tenant-id"
+```
+
+#### **Access Your MCP Server**
+```bash
+# Get the server endpoint
+az mcp server show --name "fabric-analytics-mcp" --query "endpoint"
+```
+
+### **🔧 Azure MCP Server Features**
+
+- **Automatic scaling** based on usage
+- **Built-in monitoring** and logging
+- **Integrated security** with Azure AD
+- **Zero infrastructure management**
+- **Global CDN** for low latency
+- **Automatic SSL/TLS** certificates
+
+### **💰 Cost Optimization**
+
+Azure MCP Server offers:
+- **Pay-per-request** pricing model
+- **Automatic hibernation** during idle periods
+- **Resource sharing** across multiple clients
+- **No minimum infrastructure costs**
+
+**📚 Learn More**: [Azure MCP Server Documentation](https://docs.microsoft.com/azure/mcp-server/)
+
+**Note**: Azure MCP Server is currently in preview. Check [Azure Preview Terms](https://azure.microsoft.com/support/legal/preview-supplemental-terms/) for service availability and limitations.
 
 ## 🏗️ **Architecture**
 

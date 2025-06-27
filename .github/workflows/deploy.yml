@@ -1,0 +1,320 @@
+name: Build and Deploy to AKS
+
+on:
+  push:
+    branches: [ main, master ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+        - staging
+        - production
+
+env:
+  REGISTRY: ${{ secrets.ACR_LOGIN_SERVER }}
+  IMAGE_NAME: fabric-analytics-mcp
+  AZURE_RESOURCE_GROUP: ${{ secrets.AZURE_RESOURCE_GROUP }}
+  AKS_CLUSTER_NAME: ${{ secrets.AKS_CLUSTER_NAME }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Run linting
+      run: npm run lint --if-present
+
+    - name: Build TypeScript
+      run: npm run build
+
+    - name: Run tests
+      run: npm test --if-present
+
+    - name: Validate configuration
+      run: |
+        if [ -f "scripts/validate-deployment.sh" ]; then
+          chmod +x scripts/validate-deployment.sh
+          ./scripts/validate-deployment.sh --skip-auth --skip-mcp --skip-perf
+        fi
+
+  security-scan:
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+
+    - name: Upload Trivy scan results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v3
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+  build-and-push:
+    needs: [test]
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tags }}
+      image-digest: ${{ steps.build.outputs.digest }}
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to Azure Container Registry
+      uses: azure/docker-login@v1
+      with:
+        login-server: ${{ secrets.ACR_LOGIN_SERVER }}
+        username: ${{ secrets.ACR_USERNAME }}
+        password: ${{ secrets.ACR_PASSWORD }}
+
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+
+    - name: Build and push Docker image
+      id: build
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        platforms: linux/amd64,linux/arm64
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        build-args: |
+          BUILD_DATE=${{ github.event.head_commit.timestamp }}
+          VERSION=${{ steps.meta.outputs.version }}
+          COMMIT_SHA=${{ github.sha }}
+
+    - name: Sign container image
+      uses: sigstore/cosign-installer@v3
+      if: github.event_name != 'pull_request'
+      with:
+        cosign-release: 'v2.1.1'
+
+    - name: Sign the published Docker image
+      if: github.event_name != 'pull_request'
+      env:
+        COSIGN_EXPERIMENTAL: 1
+      run: echo "${{ steps.meta.outputs.tags }}" | xargs -I {} cosign sign --yes {}@${{ steps.build.outputs.digest }}
+
+  deploy-staging:
+    needs: [build-and-push, security-scan]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.event.inputs.environment == 'staging'
+    environment: staging
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Azure Login
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Set up kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'v1.28.0'
+
+    - name: Get AKS credentials
+      run: |
+        az aks get-credentials \
+          --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+          --name ${{ env.AKS_CLUSTER_NAME }}-staging \
+          --overwrite-existing
+
+    - name: Create namespace if not exists
+      run: |
+        kubectl create namespace fabric-mcp-staging --dry-run=client -o yaml | kubectl apply -f -
+
+    - name: Deploy to staging
+      run: |
+        # Update image in deployment
+        IMAGE_TAG="${{ needs.build-and-push.outputs.image-tag }}"
+        sed -i "s|your-acr-registry.azurecr.io/fabric-analytics-mcp:latest|${IMAGE_TAG}|g" k8s/deployment.yaml
+        
+        # Apply Kubernetes manifests
+        kubectl apply -f k8s/namespace.yaml
+        kubectl apply -f k8s/rbac.yaml
+        kubectl apply -f k8s/configmap.yaml
+        kubectl apply -f k8s/deployment.yaml
+        kubectl apply -f k8s/service.yaml
+        kubectl apply -f k8s/hpa.yaml
+        
+        # Wait for rollout
+        kubectl rollout status deployment/fabric-analytics-mcp -n fabric-mcp-staging --timeout=300s
+
+    - name: Verify deployment
+      run: |
+        kubectl get pods -n fabric-mcp-staging
+        kubectl get services -n fabric-mcp-staging
+        
+        # Health check
+        EXTERNAL_IP=$(kubectl get service fabric-analytics-mcp-service -n fabric-mcp-staging -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+        if [ -n "$EXTERNAL_IP" ]; then
+          curl -f "http://$EXTERNAL_IP/health" || echo "Health check failed"
+        fi
+
+    - name: Run deployment validation
+      run: |
+        chmod +x scripts/validate-deployment.sh
+        EXTERNAL_IP=$(kubectl get service fabric-analytics-mcp-service -n fabric-mcp-staging -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+        if [ -n "$EXTERNAL_IP" ]; then
+          ./scripts/validate-deployment.sh --url "http://$EXTERNAL_IP" --skip-auth
+        fi
+
+  deploy-production:
+    needs: [build-and-push, security-scan, deploy-staging]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v') || github.event.inputs.environment == 'production'
+    environment: production
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Azure Login
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS_PROD }}
+
+    - name: Set up kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'v1.28.0'
+
+    - name: Get AKS credentials
+      run: |
+        az aks get-credentials \
+          --resource-group ${{ secrets.AZURE_RESOURCE_GROUP_PROD }} \
+          --name ${{ secrets.AKS_CLUSTER_NAME_PROD }} \
+          --overwrite-existing
+
+    - name: Deploy to production
+      run: |
+        # Update image in deployment
+        IMAGE_TAG="${{ needs.build-and-push.outputs.image-tag }}"
+        sed -i "s|your-acr-registry.azurecr.io/fabric-analytics-mcp:latest|${IMAGE_TAG}|g" k8s/deployment.yaml
+        
+        # Apply Kubernetes manifests
+        kubectl apply -f k8s/namespace.yaml
+        kubectl apply -f k8s/rbac.yaml
+        kubectl apply -f k8s/configmap.yaml
+        kubectl apply -f k8s/deployment.yaml
+        kubectl apply -f k8s/service.yaml
+        kubectl apply -f k8s/hpa.yaml
+        kubectl apply -f k8s/ingress.yaml
+        
+        # Wait for rollout
+        kubectl rollout status deployment/fabric-analytics-mcp -n fabric-mcp --timeout=600s
+
+    - name: Verify production deployment
+      run: |
+        kubectl get pods -n fabric-mcp
+        kubectl get services -n fabric-mcp
+        kubectl get ingress -n fabric-mcp
+        
+        # Extended health check
+        EXTERNAL_IP=$(kubectl get service fabric-analytics-mcp-service -n fabric-mcp -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+        if [ -n "$EXTERNAL_IP" ]; then
+          for i in {1..5}; do
+            if curl -f "http://$EXTERNAL_IP/health"; then
+              echo "Health check passed"
+              break
+            else
+              echo "Health check attempt $i failed, retrying..."
+              sleep 10
+            fi
+          done
+        fi
+
+    - name: Create GitHub Release
+      if: startsWith(github.ref, 'refs/tags/v')
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: Release ${{ github.ref }}
+        body: |
+          ## Changes in this Release
+          - Container image: `${{ needs.build-and-push.outputs.image-tag }}`
+          - Image digest: `${{ needs.build-and-push.outputs.image-digest }}`
+          
+          ## Deployment
+          This release has been automatically deployed to production AKS cluster.
+          
+          ## Verification
+          Health endpoint: `https://your-domain.com/health`
+          Metrics endpoint: `https://your-domain.com/metrics`
+        draft: false
+        prerelease: false
+
+  cleanup:
+    needs: [deploy-production]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+    - name: Cleanup old images
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+      continue-on-error: true
+
+    - name: Remove old container images
+      run: |
+        # Keep only the last 10 images
+        az acr repository show-tags \
+          --name ${{ secrets.ACR_NAME }} \
+          --repository ${{ env.IMAGE_NAME }} \
+          --output table \
+          --orderby time_desc \
+          --top 20 | tail -n +11 | while read tag; do
+            if [ "$tag" != "latest" ] && [ "$tag" != "main" ]; then
+              az acr repository delete \
+                --name ${{ secrets.ACR_NAME }} \
+                --image ${{ env.IMAGE_NAME }}:$tag \
+                --yes || true
+            fi
+          done
+      continue-on-error: true

@@ -6,6 +6,8 @@ import { z } from "zod";
 import { FabricApiClient, ApiResponse, JobExecutionResult } from './fabric-client.js';
 import { SimulationService } from './simulation-service.js';
 import { MicrosoftAuthClient, AuthMethod, AuthResult } from './auth-client.js';
+import http from 'http';
+import url from 'url';
 
 // Enhanced Authentication Configuration
 interface AuthConfig {
@@ -1204,10 +1206,149 @@ ${!status.tokenValid && status.authMethod !== 'bearer' ? `
   }
 )
 
+/**
+ * Health check endpoint for Docker/Kubernetes deployments
+ */
+function createHealthServer(): http.Server {
+  const healthServer = http.createServer((req, res) => {
+    const parsedUrl = url.parse(req.url || '', true);
+    const pathname = parsedUrl.pathname;
+
+    // Set CORS headers
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+    if (req.method === 'OPTIONS') {
+      res.writeHead(200);
+      res.end();
+      return;
+    }
+
+    if (pathname === '/health') {
+      // Basic health check
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        version: process.env.npm_package_version || '1.0.0',
+        uptime: process.uptime(),
+        memory: process.memoryUsage(),
+        environment: process.env.NODE_ENV || 'development'
+      }));
+    } else if (pathname === '/ready') {
+      // Readiness check - verify authentication and dependencies
+      const checkReadiness = async () => {
+        try {
+          // Quick auth check if configured
+          if (authConfig.method !== AuthMethod.BEARER_TOKEN && authClient) {
+            // Don't actually authenticate, just check if we have the required config
+            if (!authConfig.clientId || !authConfig.tenantId) {
+              throw new Error('Missing required authentication configuration');
+            }
+          }
+
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            status: 'ready',
+            timestamp: new Date().toISOString(),
+            authMethod: authConfig.method,
+            hasClientId: !!authConfig.clientId,
+            hasTenantId: !!authConfig.tenantId,
+            hasDefaultWorkspace: !!authConfig.defaultWorkspaceId
+          }));
+        } catch (error) {
+          res.writeHead(503, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            status: 'not ready',
+            timestamp: new Date().toISOString(),
+            error: error instanceof Error ? error.message : 'Unknown error'
+          }));
+        }
+      };
+
+      checkReadiness().catch((error) => {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          status: 'error',
+          timestamp: new Date().toISOString(),
+          error: error instanceof Error ? error.message : 'Unknown error'
+        }));
+      });
+    } else if (pathname === '/metrics') {
+      // Basic metrics endpoint for monitoring
+      res.writeHead(200, { 'Content-Type': 'text/plain' });
+      const metrics = [
+        `# HELP mcp_server_uptime_seconds Server uptime in seconds`,
+        `# TYPE mcp_server_uptime_seconds counter`,
+        `mcp_server_uptime_seconds ${process.uptime()}`,
+        ``,
+        `# HELP mcp_server_memory_usage_bytes Memory usage in bytes`,
+        `# TYPE mcp_server_memory_usage_bytes gauge`,
+        `mcp_server_memory_usage_bytes{type="rss"} ${process.memoryUsage().rss}`,
+        `mcp_server_memory_usage_bytes{type="heapTotal"} ${process.memoryUsage().heapTotal}`,
+        `mcp_server_memory_usage_bytes{type="heapUsed"} ${process.memoryUsage().heapUsed}`,
+        `mcp_server_memory_usage_bytes{type="external"} ${process.memoryUsage().external}`,
+        ``,
+        `# HELP mcp_server_auth_method Authentication method configured`,
+        `# TYPE mcp_server_auth_method info`,
+        `mcp_server_auth_method{method="${authConfig.method}"} 1`,
+        ``
+      ].join('\n');
+      res.end(metrics);
+    } else {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        error: 'Not Found',
+        message: 'Available endpoints: /health, /ready, /metrics'
+      }));
+    }
+  });
+
+  return healthServer;
+}
+
 async function main() {
+  // Start health server for Docker/Kubernetes deployments
+  const port = process.env.PORT ? parseInt(process.env.PORT) : 3000;
+  const enableHealthServer = process.env.ENABLE_HEALTH_SERVER !== 'false';
+  
+  if (enableHealthServer) {
+    const healthServer = createHealthServer();
+    healthServer.listen(port, () => {
+      console.error(`Health server listening on port ${port}`);
+      console.error('Health endpoints:');
+      console.error(`  http://localhost:${port}/health - Health check`);
+      console.error(`  http://localhost:${port}/ready - Readiness check`);
+      console.error(`  http://localhost:${port}/metrics - Metrics endpoint`);
+    });
+
+    // Graceful shutdown
+    process.on('SIGTERM', () => {
+      console.error('SIGTERM received, shutting down gracefully');
+      healthServer.close(() => {
+        console.error('Health server closed');
+        process.exit(0);
+      });
+    });
+
+    process.on('SIGINT', () => {
+      console.error('SIGINT received, shutting down gracefully');
+      healthServer.close(() => {
+        console.error('Health server closed');
+        process.exit(0);
+      });
+    });
+  }
+
+  // Start MCP server
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error("Microsoft Fabric Analytics MCP Server running on stdio");
+  
+  if (enableHealthServer) {
+    console.error(`Health endpoints available at http://localhost:${port}`);
+  }
 }
 
 main().catch((error) => {

@@ -1,0 +1,95 @@
+# Horizontal Pod Autoscaler for Microsoft Fabric Analytics MCP Server
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: fabric-analytics-mcp-hpa
+  namespace: fabric-mcp
+  labels:
+    app: fabric-analytics-mcp
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: fabric-analytics-mcp
+  
+  minReplicas: 3
+  maxReplicas: 10
+  
+  metrics:
+  # CPU utilization target
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  
+  # Memory utilization target
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  
+  # Custom metrics (if Prometheus is available)
+  - type: Pods
+    pods:
+      metric:
+        name: http_requests_per_second
+      target:
+        type: AverageValue
+        averageValue: "50"
+  
+  # Scale-down behavior configuration
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300  # 5 minutes
+      policies:
+      - type: Percent
+        value: 10
+        periodSeconds: 60
+      - type: Pods
+        value: 1
+        periodSeconds: 60
+      selectPolicy: Min
+    
+    # Scale-up behavior configuration
+    scaleUp:
+      stabilizationWindowSeconds: 60   # 1 minute
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+      - type: Pods
+        value: 2
+        periodSeconds: 60
+      selectPolicy: Max
+---
+# Vertical Pod Autoscaler (optional - requires VPA to be installed)
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: fabric-analytics-mcp-vpa
+  namespace: fabric-mcp
+  labels:
+    app: fabric-analytics-mcp
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: fabric-analytics-mcp
+  
+  updatePolicy:
+    updateMode: "Auto"
+  
+  resourcePolicy:
+    containerPolicies:
+    - containerName: fabric-analytics-mcp
+      minAllowed:
+        cpu: 100m
+        memory: 128Mi
+      maxAllowed:
+        cpu: 1000m
+        memory: 1Gi
+      controlledResources: ["cpu", "memory"]
