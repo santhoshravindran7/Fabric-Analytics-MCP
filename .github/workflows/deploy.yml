@@ -17,6 +17,12 @@ on:
         - staging
         - production
 
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+  id-token: write
+
 env:
   REGISTRY: ${{ secrets.ACR_LOGIN_SERVER }}
   IMAGE_NAME: fabric-analytics-mcp
@@ -62,6 +68,7 @@ jobs:
       security-events: write
       actions: read
       contents: read
+      id-token: write  # Required for SARIF upload
     steps:
     - name: Checkout code
       uses: actions/checkout@v4

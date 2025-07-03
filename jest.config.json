@@ -7,13 +7,22 @@
     "**/tests/**/*.test.js"
   ],
   "transform": {
-    "^.+\\.ts$": "ts-jest"
+    "^.+\\.ts$": ["ts-jest", {
+      "tsconfig": {
+        "module": "commonjs",
+        "esModuleInterop": true,
+        "allowSyntheticDefaultImports": true
+      }
+    }]
+  },
+  "moduleFileExtensions": ["ts", "js", "json"],
+  "moduleNameMapper": {
+    "^(\\.{1,2}/.*)\\.js$": "$1"
   },
   "collectCoverageFrom": [
     "src/**/*.ts",
     "!src/**/*.d.ts"
   ],
   "coverageDirectory": "coverage",
-  "moduleFileExtensions": ["ts", "js", "json"],
   "testTimeout": 10000
 }
