@@ -854,6 +854,73 @@ function getNotebookTemplate(template: string): any {
  * @param simulationParams - Parameters for simulation
  * @returns Promise resolving to API response
  */
+/**
+ * Get current authentication status for health checks
+ */
+function getAuthenticationStatus() {
+  const hasFabricToken = !!process.env.FABRIC_TOKEN;
+  const hasValidCache = cachedAuthResult && cachedAuthResult.expiresOn > new Date();
+  
+  return {
+    method: authConfig.method,
+    configured: !!authConfig.clientId || hasFabricToken,
+    hasCachedToken: hasValidCache,
+    hasFabricToken: hasFabricToken,
+    ready: authConfig.method === AuthMethod.BEARER_TOKEN || hasFabricToken || hasValidCache,
+    recommendation: authConfig.method !== AuthMethod.BEARER_TOKEN && !hasFabricToken ? 
+      "For Claude Desktop, use FABRIC_AUTH_METHOD=bearer_token with FABRIC_TOKEN" : 
+      "Authentication properly configured"
+  };
+}
+
+/**
+ * Validate bearer token format and basic structure
+ */
+function validateBearerToken(token: string): { isValid: boolean; error?: string; expiresAt?: Date } {
+  if (!token || token.length < 10) {
+    return { isValid: false, error: "Token is too short or empty" };
+  }
+
+  // Check if it's a JWT token
+  if (token.includes('.')) {
+    try {
+      const parts = token.split('.');
+      if (parts.length !== 3) {
+        return { isValid: false, error: "Invalid JWT format" };
+      }
+
+      // Decode JWT payload to check expiration
+      const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
+      
+      if (payload.exp) {
+        const expirationDate = new Date(payload.exp * 1000);
+        const now = new Date();
+        
+        if (expirationDate <= now) {
+          return { 
+            isValid: false, 
+            error: `Token expired at ${expirationDate.toISOString()}`,
+            expiresAt: expirationDate
+          };
+        }
+        
+        // Warn if token expires soon (within 1 hour)
+        const oneHour = 60 * 60 * 1000;
+        if (expirationDate.getTime() - now.getTime() < oneHour) {
+          console.error(`⚠️ Token expires soon: ${expirationDate.toISOString()}`);
+        }
+        
+        return { isValid: true, expiresAt: expirationDate };
+      }
+    } catch (error) {
+      return { isValid: false, error: "Failed to decode JWT token" };
+    }
+  }
+
+  // For non-JWT tokens, assume valid if not obviously invalid
+  return { isValid: true };
+}
+
 async function executeApiCall<T>(
   bearerToken: string | undefined,
   workspaceId: string,
@@ -882,6 +949,15 @@ async function executeApiCall<T>(
   const workspaceToUse = workspaceId || authConfig.defaultWorkspaceId || workspaceId;
 
   if (tokenToUse && tokenToUse !== "test-token" && tokenToUse !== "simulation") {
+    // Validate token before using it
+    const validation = validateBearerToken(tokenToUse);
+    if (!validation.isValid) {
+      return {
+        status: 'error',
+        error: `Invalid bearer token: ${validation.error}. Please generate a new token from https://app.powerbi.com/embedsetup`
+      };
+    }
+
     try {
       const client = new FabricApiClient(tokenToUse, workspaceToUse);
       return await apiCall(client);
@@ -1800,7 +1876,9 @@ function createHealthServer(): http.Server {
     }
 
     if (pathname === '/health') {
-      // Basic health check
+      // Enhanced health check with authentication status
+      const authStatus = getAuthenticationStatus();
+      
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({
         status: 'healthy',
@@ -1808,7 +1886,8 @@ function createHealthServer(): http.Server {
         version: process.env.npm_package_version || '1.0.0',
         uptime: process.uptime(),
         memory: process.memoryUsage(),
-        environment: process.env.NODE_ENV || 'development'
+        environment: process.env.NODE_ENV || 'development',
+        authentication: authStatus
       }));
     } else if (pathname === '/ready') {
       // Readiness check - verify authentication and dependencies
