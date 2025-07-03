@@ -52,7 +52,7 @@ function initializeAuthClient(): void {
 }
 
 /**
- * Get or refresh authentication token
+ * Get or refresh authentication token with timeout protection for Claude Desktop
  */
 async function getAuthToken(): Promise<string | null> {
   // If using bearer token method or no auth configured, return null (use simulation)
@@ -72,42 +72,69 @@ async function getAuthToken(): Promise<string | null> {
     return null;
   }
 
+  // Wrap authentication in a timeout to prevent blocking in Claude Desktop
+  const authTimeout = 10000; // 10 seconds timeout to prevent blocking
+  
   try {
-    switch (authConfig.method) {
-      case AuthMethod.SERVICE_PRINCIPAL:
-        if (!authConfig.clientSecret || !authConfig.tenantId) {
-          throw new Error("Service Principal requires CLIENT_SECRET and TENANT_ID");
-        }
-        cachedAuthResult = await authClient.authenticateWithServicePrincipal(
-          authConfig.clientId!,
-          authConfig.clientSecret,
-          authConfig.tenantId
-        );
-        break;
+    const authPromise = performAuthentication();
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => {
+        reject(new Error("Authentication timeout - Claude Desktop environment may not support interactive authentication. Consider using FABRIC_AUTH_METHOD=bearer_token with a pre-generated token."));
+      }, authTimeout);
+    });
 
-      case AuthMethod.DEVICE_CODE:
-        cachedAuthResult = await authClient.authenticateWithDeviceCode(
-          authConfig.clientId!,
-          authConfig.tenantId
-        );
-        break;
-
-      case AuthMethod.INTERACTIVE:
-        cachedAuthResult = await authClient.authenticateInteractively(
-          authConfig.clientId!,
-          authConfig.tenantId
-        );
-        break;
-
-      default:
-        throw new Error(`Unsupported authentication method: ${authConfig.method}`);
-    }
-
+    cachedAuthResult = await Promise.race([authPromise, timeoutPromise]);
     console.error(`✅ Authentication successful using ${authConfig.method}`);
     return cachedAuthResult.accessToken;
   } catch (error) {
-    console.error(`❌ Authentication failed: ${error instanceof Error ? error.message : String(error)}`);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error(`❌ Authentication failed: ${errorMessage}`);
+    
+    // Provide helpful guidance for Claude Desktop users
+    if (errorMessage.includes("timeout") || errorMessage.includes("Claude Desktop")) {
+      console.error("💡 For Claude Desktop usage, consider using bearer token authentication:");
+      console.error("   1. Set FABRIC_AUTH_METHOD=bearer_token");
+      console.error("   2. Provide token directly in tool calls");
+      console.error("   3. Or set FABRIC_TOKEN environment variable");
+    }
+    
     return null;
+  }
+}
+
+/**
+ * Perform the actual authentication based on configured method
+ */
+async function performAuthentication(): Promise<AuthResult> {
+  if (!authClient) {
+    throw new Error("Authentication client not initialized");
+  }
+
+  switch (authConfig.method) {
+    case AuthMethod.SERVICE_PRINCIPAL:
+      if (!authConfig.clientSecret || !authConfig.tenantId) {
+        throw new Error("Service Principal requires CLIENT_SECRET and TENANT_ID");
+      }
+      return await authClient.authenticateWithServicePrincipal(
+        authConfig.clientId!,
+        authConfig.clientSecret,
+        authConfig.tenantId
+      );
+
+    case AuthMethod.DEVICE_CODE:
+      return await authClient.authenticateWithDeviceCode(
+        authConfig.clientId!,
+        authConfig.tenantId
+      );
+
+    case AuthMethod.INTERACTIVE:
+      return await authClient.authenticateInteractively(
+        authConfig.clientId!,
+        authConfig.tenantId
+      );
+
+    default:
+      throw new Error(`Unsupported authentication method: ${authConfig.method}`);
   }
 }
 
@@ -836,11 +863,18 @@ async function executeApiCall<T>(
 ): Promise<ApiResponse<T>> {
   let tokenToUse = bearerToken;
 
-  // If no bearer token provided, try to get one from environment auth
+  // If no bearer token provided, check environment variables
   if (!tokenToUse || tokenToUse === "test-token" || tokenToUse === "simulation") {
-    const envToken = await getAuthToken();
+    // First try FABRIC_TOKEN environment variable
+    const envToken = process.env.FABRIC_TOKEN;
     if (envToken) {
       tokenToUse = envToken;
+    } else {
+      // If no FABRIC_TOKEN, try authentication method
+      const authToken = await getAuthToken();
+      if (authToken) {
+        tokenToUse = authToken;
+      }
     }
   }
 
@@ -858,6 +892,18 @@ async function executeApiCall<T>(
       };
     }
   } else {
+    // Authentication failed or no token available - provide helpful guidance
+    if (authConfig.method !== AuthMethod.BEARER_TOKEN && authConfig.clientId) {
+      return {
+        status: 'error',
+        error: `Authentication failed. For Claude Desktop usage:
+1. Use bearer token authentication: Set FABRIC_AUTH_METHOD=bearer_token
+2. Provide token directly in tool calls via bearerToken parameter
+3. Or get a token from: https://app.powerbi.com/embedsetup and set FABRIC_TOKEN env var
+4. Alternative: Use simulation mode by setting bearerToken to "simulation"`
+      };
+    }
+    
     return SimulationService.simulateApiCall(operation, simulationParams);
   }
 }
@@ -1836,54 +1882,6 @@ function createHealthServer(): http.Server {
   return healthServer;
 }
 
-async function main() {
-  // Start health server for Docker/Kubernetes deployments
-  const port = process.env.PORT ? parseInt(process.env.PORT) : 3000;
-  const enableHealthServer = process.env.ENABLE_HEALTH_SERVER !== 'false';
-  
-  if (enableHealthServer) {
-    const healthServer = createHealthServer();
-    healthServer.listen(port, () => {
-      console.error(`Health server listening on port ${port}`);
-      console.error('Health endpoints:');
-      console.error(`  http://localhost:${port}/health - Health check`);
-      console.error(`  http://localhost:${port}/ready - Readiness check`);
-      console.error(`  http://localhost:${port}/metrics - Metrics endpoint`);
-    });
-
-    // Graceful shutdown
-    process.on('SIGTERM', () => {
-      console.error('SIGTERM received, shutting down gracefully');
-      healthServer.close(() => {
-        console.error('Health server closed');
-        process.exit(0);
-      });
-    });
-
-    process.on('SIGINT', () => {
-      console.error('SIGINT received, shutting down gracefully');
-      healthServer.close(() => {
-        console.error('Health server closed');
-        process.exit(0);
-      });
-    });
-  }
-
-  // Start MCP server
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
-  console.error("Microsoft Fabric Analytics MCP Server running on stdio");
-  
-  if (enableHealthServer) {
-    console.error(`Health endpoints available at http://localhost:${port}`);
-  }
-}
-
-main().catch((error) => {
-  console.error("Fatal error in main():", error);
-  process.exit(1);
-});
-
 // ==================== NOTEBOOK MANAGEMENT TOOLS ====================
 
 server.tool(
@@ -2132,3 +2130,51 @@ server.tool(
     };
   }
 );
+
+async function main() {
+  // Start health server for Docker/Kubernetes deployments
+  const port = process.env.PORT ? parseInt(process.env.PORT) : 3000;
+  const enableHealthServer = process.env.ENABLE_HEALTH_SERVER !== 'false';
+  
+  if (enableHealthServer) {
+    const healthServer = createHealthServer();
+    healthServer.listen(port, () => {
+      console.error(`Health server listening on port ${port}`);
+      console.error('Health endpoints:');
+      console.error(`  http://localhost:${port}/health - Health check`);
+      console.error(`  http://localhost:${port}/ready - Readiness check`);
+      console.error(`  http://localhost:${port}/metrics - Metrics endpoint`);
+    });
+
+    // Graceful shutdown
+    process.on('SIGTERM', () => {
+      console.error('SIGTERM received, shutting down gracefully');
+      healthServer.close(() => {
+        console.error('Health server closed');
+        process.exit(0);
+      });
+    });
+
+    process.on('SIGINT', () => {
+      console.error('SIGINT received, shutting down gracefully');
+      healthServer.close(() => {
+        console.error('Health server closed');
+        process.exit(0);
+      });
+    });
+  }
+
+  // Start MCP server
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+  console.error("Microsoft Fabric Analytics MCP Server running on stdio");
+  
+  if (enableHealthServer) {
+    console.error(`Health endpoints available at http://localhost:${port}`);
+  }
+}
+
+main().catch((error) => {
+  console.error("Fatal error in main():", error);
+  process.exit(1);
+});

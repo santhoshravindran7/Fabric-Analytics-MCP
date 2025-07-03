@@ -203,3 +203,8 @@ The implementation provides a complete notebook management solution that bridges
 - ✅ **GitHub Actions Fix**: Updated Docker Compose commands for V2 compatibility
 - ✅ **Integration Tests**: Fixed Docker Compose command compatibility issues
 - ✅ **Cross-Platform CI**: Robust fallback mechanisms for different runner environments
+
+### **Deployment & Prerequisites Update**
+
+> **Note:**
+> As of July 2025, it is no longer required to register the `Microsoft.MCP` resource provider (e.g., via `az feature register --namespace Microsoft.MCP --name ServerHosting`) for deploying or using the Microsoft Fabric Analytics MCP Server. This step can be skipped, and users do not need to request preview access for this resource provider. All other implementation and deployment steps remain unchanged.
