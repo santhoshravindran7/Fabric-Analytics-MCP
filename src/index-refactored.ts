@@ -60,9 +60,9 @@ const server = new McpServer({
 // API Client class for better organization and testability
 class FabricApiClient {
   constructor(
-    private bearerToken: string,
-    private workspaceId: string,
-    private config: FabricConfig = DEFAULT_CONFIG
+    private _bearerToken: string,
+    private _workspaceId: string,
+    private _config: FabricConfig = DEFAULT_CONFIG
   ) {}
 
   async makeRequest<T>(
@@ -74,19 +74,19 @@ class FabricApiClient {
     } = {}
   ): Promise<ApiResponse<T>> {
     const { method = "GET", body, headers = {} } = options;
-    const url = `${this.config.apiBaseUrl}/workspaces/${this.workspaceId}/${endpoint}`;
+    const url = `${this._config.apiBaseUrl}/workspaces/${this._workspaceId}/${endpoint}`;
     
     const requestHeaders: Record<string, string> = {
-      "Authorization": `Bearer ${this.bearerToken}`,
+      "Authorization": `Bearer ${this._bearerToken}`,
       "Content-Type": "application/json",
       "Accept": "application/json",
-      "User-Agent": this.config.userAgent,
+      "User-Agent": this._config.userAgent,
       ...headers
     };
 
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), this.config.timeout);
+      const timeoutId = setTimeout(() => controller.abort(), this._config.timeout);
 
       const response = await fetch(url, {
         method,
@@ -238,7 +238,7 @@ class SimulationService {
           }
         };
 
-      case "job-status":
+      case "job-status": {
         const statuses = ["Running", "Completed", "Failed", "Cancelled"];
         const randomStatus = statuses[Math.floor(Math.random() * statuses.length)];
         return {
@@ -251,6 +251,7 @@ class SimulationService {
             ...(randomStatus === "Failed" && { error: "Sample execution error for testing" })
           }
         };
+      }
 
       default:
         return {
@@ -315,7 +316,7 @@ async function executeApiCall<T>(
   bearerToken: string | undefined,
   workspaceId: string,
   operation: string,
-  apiCall: (client: FabricApiClient) => Promise<ApiResponse<T>>,
+  apiCall: (_client: FabricApiClient) => Promise<ApiResponse<T>>,
   simulationParams?: any
 ): Promise<ApiResponse<T>> {
   if (bearerToken && bearerToken !== "test-token" && bearerToken !== "simulation") {

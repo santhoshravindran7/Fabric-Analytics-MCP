@@ -3,7 +3,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { FabricApiClient, ApiResponse, JobExecutionResult } from './fabric-client.js';
+import { FabricApiClient, ApiResponse } from './fabric-client.js';
 import { SimulationService } from './simulation-service.js';
 import { MicrosoftAuthClient, AuthMethod, AuthResult } from './auth-client.js';
 import http from 'http';
@@ -912,6 +912,7 @@ function validateBearerToken(token: string): { isValid: boolean; error?: string;
         
         return { isValid: true, expiresAt: expirationDate };
       }
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars, no-unused-vars
     } catch (error) {
       return { isValid: false, error: "Failed to decode JWT token" };
     }
@@ -925,7 +926,7 @@ async function executeApiCall<T>(
   bearerToken: string | undefined,
   workspaceId: string,
   operation: string,
-  apiCall: (client: FabricApiClient) => Promise<ApiResponse<T>>,
+  apiCall: (_client: FabricApiClient) => Promise<ApiResponse<T>>,
   simulationParams?: any
 ): Promise<ApiResponse<T>> {
   let tokenToUse = bearerToken;

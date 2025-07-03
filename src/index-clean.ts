@@ -3,7 +3,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { FabricApiClient, ApiResponse, JobExecutionResult } from './fabric-client.js';
+import { FabricApiClient, ApiResponse } from './fabric-client.js';
 import { SimulationService } from './simulation-service.js';
 
 // Server instance
@@ -82,7 +82,7 @@ async function executeApiCall<T>(
   bearerToken: string | undefined,
   workspaceId: string,
   operation: string,
-  apiCall: (client: FabricApiClient) => Promise<ApiResponse<T>>,
+  apiCall: (_client: FabricApiClient) => Promise<ApiResponse<T>>,
   simulationParams?: any
 ): Promise<ApiResponse<T>> {
   if (bearerToken && bearerToken !== "test-token" && bearerToken !== "simulation") {
