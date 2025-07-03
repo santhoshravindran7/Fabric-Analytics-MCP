@@ -14,7 +14,8 @@
     "resolveJsonModule": true,
     "declaration": true,
     "sourceMap": true,
-    "types": ["node"]
+    "isolatedModules": true,
+    "types": ["node", "jest"]
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "build"]

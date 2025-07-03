@@ -1,9 +1,14 @@
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { FabricApiClient } from '../src/fabric-client.js';
+import { SimulationService } from '../src/simulation-service.js';
 
-// Mock fetch for testing
-const mockFetch = jest.fn() as jest.MockedFunction<typeof fetch>;
-global.fetch = mockFetch;
+// Setup global fetch mock
+Object.defineProperty(global, 'fetch', {
+  value: jest.fn(),
+  writable: true
+});
+
+const mockFetch = global.fetch as jest.Mock;
 
 describe('FabricApiClient', () => {
   let client: FabricApiClient;
@@ -12,26 +17,26 @@ describe('FabricApiClient', () => {
 
   beforeEach(() => {
     client = new FabricApiClient(mockToken, mockWorkspaceId);
-    jest.clearAllMocks();
+    mockFetch.mockClear();
   });
 
   describe('constructor', () => {
     it('should initialize with provided token and workspace', () => {
       expect(client).toBeDefined();
-      expect(client['bearerToken']).toBe(mockToken);
-      expect(client['workspaceId']).toBe(mockWorkspaceId);
+      expect(client['_bearerToken']).toBe(mockToken);
+      expect(client['_workspaceId']).toBe(mockWorkspaceId);
     });
 
     it('should use default config when none provided', () => {
-      expect(client['config'].apiBaseUrl).toBe('https://api.fabric.microsoft.com/v1');
-      expect(client['config'].timeout).toBe(30000);
+      expect(client['_config'].apiBaseUrl).toBe('https://api.fabric.microsoft.com/v1');
+      expect(client['_config'].timeout).toBe(30000);
     });
   });
 
   describe('makeRequest', () => {
     it('should make successful GET request', async () => {
       const mockResponse = { items: ['item1', 'item2'] };
-      (fetch as jest.Mock).mockResolvedValueOnce({
+      mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(mockResponse)
       });
@@ -261,7 +266,13 @@ describe('FabricApiClient', () => {
     it('should submit Spark job', async () => {
       const sparkJob = { id: 'spark-123', status: 'Submitted' };
       const code = 'print("Hello Spark")';
-      const config = { driverCores: 2, driverMemory: '4g' };
+      const config = { 
+        driverCores: 2, 
+        driverMemory: '4g',
+        executorCores: 2,
+        executorMemory: '4g',
+        numExecutors: 2
+      };
       
       (fetch as jest.Mock).mockResolvedValueOnce({
         ok: true,

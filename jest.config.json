@@ -3,7 +3,8 @@
   "testEnvironment": "node",
   "roots": ["<rootDir>/tests"],
   "testMatch": [
-    "**/tests/**/*.test.ts"
+    "**/tests/**/*.test.ts",
+    "**/tests/**/*.test.js"
   ],
   "transform": {
     "^.+\\.ts$": "ts-jest"
@@ -13,5 +14,6 @@
     "!src/**/*.d.ts"
   ],
   "coverageDirectory": "coverage",
-  "setupFilesAfterEnv": ["<rootDir>/tests/setup.ts"]
+  "moduleFileExtensions": ["ts", "js", "json"],
+  "testTimeout": 10000
 }

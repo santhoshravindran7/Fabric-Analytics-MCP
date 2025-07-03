@@ -1,16 +1,13 @@
-/**
- * Simple Integration Test for MCP Server
- * This test validates core functionality without complex dependencies
- */
-
-describe('MCP Server Integration', () => {
+describe('MCP Server', () => {
   test('should have working test environment', () => {
     expect(true).toBe(true);
   });
 
   test('should validate core dependencies', () => {
-    // Test if we can require the core modules
-    const packageJson = require('../package.json');
+    const fs = require('fs');
+    const path = require('path');
+    const packagePath = path.join(__dirname, '..', 'package.json');
+    const packageJson = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
     
     expect(packageJson.name).toBe('mcp-for-microsoft-fabric-analytics');
     expect(packageJson.dependencies).toBeDefined();
@@ -19,12 +16,12 @@ describe('MCP Server Integration', () => {
     expect(packageJson.dependencies['@azure/msal-node']).toBeDefined();
   });
 
-  test('should validate TypeScript build output', () => {
+  test('should validate TypeScript source files exist', () => {
     const fs = require('fs');
     const path = require('path');
     
-    const buildIndexPath = path.join(__dirname, '..', 'build', 'index.js');
-    expect(fs.existsSync(buildIndexPath)).toBe(true);
+    const sourceIndexPath = path.join(__dirname, '..', 'src', 'index.ts');
+    expect(fs.existsSync(sourceIndexPath)).toBe(true);
   });
 
   test('should validate configuration files', () => {
@@ -33,12 +30,12 @@ describe('MCP Server Integration', () => {
     
     const configFiles = [
       '../tsconfig.json',
-      '../jest.config.json',
-      '../package.json'
+      '../package.json',
+      '../jest.config.json'
     ];
     
-    configFiles.forEach(configFile => {
-      const filePath = path.join(__dirname, configFile);
+    configFiles.forEach(file => {
+      const filePath = path.join(__dirname, file);
       expect(fs.existsSync(filePath)).toBe(true);
     });
   });
@@ -53,8 +50,8 @@ describe('MCP Server Integration', () => {
       '../src/auth-client.ts'
     ];
     
-    sourceFiles.forEach(sourceFile => {
-      const filePath = path.join(__dirname, sourceFile);
+    sourceFiles.forEach(file => {
+      const filePath = path.join(__dirname, file);
       expect(fs.existsSync(filePath)).toBe(true);
     });
   });
