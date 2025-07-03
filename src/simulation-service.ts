@@ -134,7 +134,7 @@ export class SimulationService {
           }
         };
 
-      case "job-status":
+      case "job-status": {
         const statuses = ["Running", "Completed", "Failed", "Cancelled"];
         const randomStatus = statuses[Math.floor(Math.random() * statuses.length)];
         const baseResponse = {
@@ -184,6 +184,7 @@ export class SimulationService {
             }
           };
         }
+      }
 
       case "analytics-query":
         return {

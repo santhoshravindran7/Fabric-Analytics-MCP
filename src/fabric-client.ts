@@ -1,5 +1,3 @@
-import { z } from "zod";
-
 // Configuration and types
 export interface FabricConfig {
   apiBaseUrl: string;
@@ -147,9 +145,9 @@ export const DEFAULT_CONFIG: FabricConfig = {
  */
 export class FabricApiClient {
   constructor(
-    private bearerToken: string,
-    private workspaceId: string,
-    private config: FabricConfig = DEFAULT_CONFIG
+    private _bearerToken: string,
+    private _workspaceId: string,
+    private _config: FabricConfig = DEFAULT_CONFIG
   ) {}
 
   /**
@@ -168,23 +166,23 @@ export class FabricApiClient {
     } = {}
   ): Promise<ApiResponse<T>> {
     const { method = "GET", body, headers = {}, queryParams } = options;
-    const url = new URL(`${this.config.apiBaseUrl}/workspaces/${this.workspaceId}/${endpoint}`);
+    const url = new URL(`${this._config.apiBaseUrl}/workspaces/${this._workspaceId}/${endpoint}`);
 
     if (queryParams) {
       Object.keys(queryParams).forEach(key => url.searchParams.append(key, String(queryParams[key])));
     }
 
     const requestHeaders: Record<string, string> = {
-      "Authorization": `Bearer ${this.bearerToken}`,
+      "Authorization": `Bearer ${this._bearerToken}`,
       "Content-Type": "application/json",
       "Accept": "application/json",
-      "User-Agent": this.config.userAgent,
+      "User-Agent": this._config.userAgent,
       ...headers
     };
 
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), this.config.timeout);
+      const timeoutId = setTimeout(() => controller.abort(), this._config.timeout);
 
       const response = await fetch(url.toString(), {
         method,

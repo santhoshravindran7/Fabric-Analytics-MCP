@@ -1,7 +1,6 @@
 import { 
   PublicClientApplication, 
   ConfidentialClientApplication,
-  AuthenticationResult,
   DeviceCodeRequest,
   ClientCredentialRequest,
   SilentFlowRequest,
@@ -9,7 +8,6 @@ import {
   Configuration,
   LogLevel
 } from "@azure/msal-node";
-import { readFileSync } from "fs";
 import { createServer } from "http";
 import { URL } from "url";
 
@@ -27,12 +25,14 @@ export interface AuthResult {
   account?: AccountInfo;
 }
 
+/* eslint-disable no-unused-vars */
 export enum AuthMethod {
   BEARER_TOKEN = "bearer",
   SERVICE_PRINCIPAL = "service_principal", 
   DEVICE_CODE = "device_code",
   INTERACTIVE = "interactive"
 }
+/* eslint-enable no-unused-vars */
 
 export class MicrosoftAuthClient {
   private publicClient?: PublicClientApplication;
@@ -59,7 +59,7 @@ export class MicrosoftAuthClient {
       },
       system: {
         loggerOptions: {
-          loggerCallback: (level, message, containsPii) => {
+          loggerCallback: (level, message, _containsPii) => {
             if (level === LogLevel.Error) {
               console.error("MSAL Error:", message);
             }
@@ -269,7 +269,7 @@ export class MicrosoftAuthClient {
     return `${this.config.authority}/oauth2/v2.0/authorize?${params.toString()}`;
   }
 
-  private async handleAuthorizationCode(code: string): Promise<AuthResult> {
+  private async handleAuthorizationCode(_code: string): Promise<AuthResult> {
     // This is a simplified implementation - in a real scenario, you'd exchange the code for tokens
     // For now, we'll use device code flow as a fallback
     console.log("Received authorization code, exchanging for tokens...");
@@ -303,7 +303,8 @@ export class MicrosoftAuthClient {
         expiresOn: response.expiresOn || new Date(Date.now() + 3600000),
         account: response.account || undefined,
       };
-    } catch (error) {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars, no-unused-vars
+    } catch (_error) {
       return null; // Silent acquisition failed, need interactive flow
     }
   }
