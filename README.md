@@ -44,6 +44,50 @@ A comprehensive Model Context Protocol (MCP) server that provides analytics capa
 
 ## 🚀 **Deployment Options**
 
+### **🤖 Claude Desktop Integration**
+**Recommended for AI Assistant Usage:**
+
+```json
+{
+  "mcpServers": {
+    "fabric-analytics": {
+      "command": "node",
+      "args": ["C:\\path\\to\\your\\build\\index.js"],
+      "cwd": "C:\\path\\to\\your\\project",
+      "env": {
+        "FABRIC_AUTH_METHOD": "bearer_token",
+        "FABRIC_TOKEN": "your_bearer_token_here",
+        "FABRIC_WORKSPACE_ID": "your_workspace_id",
+        "ENABLE_HEALTH_SERVER": "false"
+      }
+    }
+  }
+}
+```
+
+> 💡 **Get Bearer Token:** Visit [Power BI Embed Setup](https://app.powerbi.com/embedsetup) to generate tokens
+> 
+> ⚠️ **Important:** Tokens expire after ~1 hour and need to be refreshed
+
+#### **🔧 Claude Desktop Authentication Fix**
+If you experience 60-second timeouts during startup, this is due to interactive authentication flows blocking Claude Desktop's sandboxed environment. **Solution:**
+
+1. **Use Bearer Token Method** (Recommended):
+   - Set `FABRIC_AUTH_METHOD: "bearer_token"` in your config
+   - Provide `FABRIC_TOKEN` with a valid bearer token
+   - This bypasses interactive authentication entirely
+
+2. **Alternative - Per-Tool Authentication**:
+   - Provide token directly in tool calls: `bearerToken: "your_token_here"`
+   - Or use simulation mode: `bearerToken: "simulation"`
+
+3. **Troubleshooting**:
+   - Server now has 10-second timeout protection to prevent hanging
+   - Falls back to simulation mode if authentication fails
+   - Enhanced error messages provide clear guidance
+
+> 🎯 **Quick Fix**: The server automatically prioritizes `FABRIC_TOKEN` environment variable over interactive authentication flows, preventing Claude Desktop timeouts.
+
 ### **📱 Local Development**
 ```bash
 # Clone and run locally
@@ -545,8 +589,20 @@ Once connected to Claude Desktop, you can ask natural language questions like:
 
 This MCP server supports **multiple authentication methods** powered by Microsoft Authentication Library (MSAL):
 
-#### **🎫 1. Bearer Token Authentication**
-Provide your own Microsoft Fabric bearer token:
+> **🤖 For Claude Desktop:** Use Bearer Token Authentication (Method #1) for the best experience and compatibility.
+>
+> **🔧 Claude Desktop Fix:** Recent updates prevent authentication timeouts by prioritizing bearer tokens and adding timeout protection for interactive authentication flows.
+
+#### **🎫 1. Bearer Token Authentication** (Recommended for Claude Desktop)
+Perfect for AI assistants and interactive usage:
+
+**For Claude Desktop:**
+- Visit [Power BI Embed Setup](https://app.powerbi.com/embedsetup)
+- Generate a bearer token for your workspace
+- Add to your `claude_desktop_config.json`
+- **No timeout issues** - bypasses interactive authentication entirely
+
+**For Testing:**
 ```bash
 # All test scripts will prompt for authentication method
 python enhanced_auth_test.py
