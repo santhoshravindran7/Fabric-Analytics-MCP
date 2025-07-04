@@ -85,16 +85,62 @@ jobs:
       with:
         sarif_file: 'trivy-results.sarif'
 
+  docker-build-test:
+    needs: [test]
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' && secrets.ACR_USERNAME == ''
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build Docker image (test only)
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        platforms: linux/amd64
+        push: false
+        tags: fabric-analytics-mcp:test
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        build-args: |
+          BUILD_DATE=${{ github.event.head_commit.timestamp }}
+          VERSION=test
+          COMMIT_SHA=${{ github.sha }}
+
+    - name: Docker build completed
+      run: |
+        echo "✅ Docker image built successfully"
+        echo "📝 Note: Image was not pushed because Azure Container Registry is not configured"
+        echo "🔧 To enable image pushing, configure these repository secrets:"
+        echo "   - ACR_LOGIN_SERVER"
+        echo "   - ACR_USERNAME" 
+        echo "   - ACR_PASSWORD"
+
   build-and-push:
     needs: [test]
     runs-on: ubuntu-latest
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && secrets.ACR_USERNAME != ''
     outputs:
       image-tag: ${{ steps.meta.outputs.tags }}
       image-digest: ${{ steps.build.outputs.digest }}
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+
+    - name: Check Azure Container Registry secrets
+      run: |
+        echo "Checking Azure Container Registry configuration..."
+        if [ -z "${{ secrets.ACR_LOGIN_SERVER }}" ] || [ -z "${{ secrets.ACR_USERNAME }}" ] || [ -z "${{ secrets.ACR_PASSWORD }}" ]; then
+          echo "❌ Azure Container Registry secrets are not configured"
+          echo "Required secrets: ACR_LOGIN_SERVER, ACR_USERNAME, ACR_PASSWORD"
+          echo "Please configure these secrets in the repository settings to enable container builds"
+          exit 1
+        else
+          echo "✅ Azure Container Registry secrets are configured"
+        fi
 
     - name: Setup Docker Buildx
       uses: docker/setup-buildx-action@v3
@@ -150,7 +196,7 @@ jobs:
   deploy-staging:
     needs: [build-and-push, security-scan]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.event.inputs.environment == 'staging'
+    if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.event.inputs.environment == 'staging') && secrets.ACR_USERNAME != ''
     environment: staging
     steps:
     - name: Checkout code
@@ -216,7 +262,7 @@ jobs:
   deploy-production:
     needs: [build-and-push, security-scan, deploy-staging]
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v') || github.event.inputs.environment == 'production'
+    if: (startsWith(github.ref, 'refs/tags/v') || github.event.inputs.environment == 'production') && secrets.ACR_USERNAME != ''
     environment: production
     steps:
     - name: Checkout code
