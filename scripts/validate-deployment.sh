@@ -262,6 +262,7 @@ usage() {
     echo "  --skip-auth             Skip authentication tests"
     echo "  --skip-mcp              Skip MCP functionality tests"
     echo "  --skip-perf             Skip performance tests"
+    echo "  --skip-health           Skip health endpoint tests"
     echo ""
     echo "Environment Variables:"
     echo "  MCP_SERVER_URL          MCP server URL"
@@ -286,6 +287,7 @@ main() {
     local skip_auth=false
     local skip_mcp=false
     local skip_perf=false
+    local skip_health=false
     
     # Parse command line arguments
     while [[ $# -gt 0 ]]; do
@@ -310,6 +312,10 @@ main() {
                 skip_perf=true
                 shift
                 ;;
+            --skip-health)
+                skip_health=true
+                shift
+                ;;
             *)
                 print_error "Unknown option: $1"
                 usage
@@ -326,8 +332,10 @@ main() {
     validate_environment
     echo ""
     
-    run_health_checks
-    echo ""
+    if [[ "$skip_health" == "false" ]]; then
+        run_health_checks
+        echo ""
+    fi
     
     if [[ "$skip_auth" == "false" ]]; then
         test_authentication
