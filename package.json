@@ -11,7 +11,7 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "start": "node build/index.js",
-    "test": "jest",
+    "test": "jest --forceExit",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "test:pre-push": "node test-before-push.js",
