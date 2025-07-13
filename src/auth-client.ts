@@ -10,6 +10,10 @@ import {
 } from "@azure/msal-node";
 import { createServer } from "http";
 import { URL } from "url";
+import { exec } from "child_process";
+import { promisify } from "util";
+
+const execAsync = promisify(exec);
 
 export interface AuthConfig {
   clientId: string;
@@ -30,7 +34,8 @@ export enum AuthMethod {
   BEARER_TOKEN = "bearer",
   SERVICE_PRINCIPAL = "service_principal", 
   DEVICE_CODE = "device_code",
-  INTERACTIVE = "interactive"
+  INTERACTIVE = "interactive",
+  AZURE_CLI = "azure_cli"
 }
 /* eslint-enable no-unused-vars */
 
@@ -349,8 +354,9 @@ Choose authentication method:
 2. Service Principal (client ID + secret + tenant)
 3. Device Code (sign in with browser on another device)
 4. Interactive (sign in with browser - opens automatically)
+5. Azure CLI (use Azure CLI logged-in context)
 
-Enter choice (1-4): `;
+Enter choice (1-5): `;
   }
 
   /**
@@ -366,8 +372,198 @@ Enter choice (1-4): `;
         return AuthMethod.DEVICE_CODE;
       case "4":
         return AuthMethod.INTERACTIVE;
+      case "5":
+        return AuthMethod.AZURE_CLI;
       default:
         throw new Error("Invalid authentication method selection");
+    }
+  }
+
+  /**
+   * Authenticate using Azure CLI context
+   * This method leverages the existing Azure CLI login session
+   */
+  async authenticateWithAzureCli(scope?: string[]): Promise<AuthResult> {
+    try {
+      // Check if Azure CLI is installed and user is logged in
+      await this.checkAzureCliStatus();
+      
+      // Get access token using Azure CLI
+      const targetScope = scope || this.config.scope || this.defaultScope;
+      const scopeString = targetScope.join(' ');
+      
+      // Use Azure CLI to get token for Microsoft Fabric/Power BI
+      const command = `az account get-access-token --scope "${scopeString}" --output json`;
+      
+      console.log("🔄 Getting access token from Azure CLI...");
+      console.log(`   Scope: ${scopeString}`);
+      
+      const { stdout } = await execAsync(command);
+      const tokenResponse = JSON.parse(stdout);
+      
+      if (!tokenResponse.accessToken) {
+        throw new Error("Failed to get access token from Azure CLI - no access token in response");
+      }
+      
+      // Parse expiration date
+      const expiresOn = new Date(tokenResponse.expiresOn || Date.now() + 3600000);
+      
+      console.log("✅ Successfully authenticated using Azure CLI");
+      console.log(`   Token expires: ${expiresOn.toISOString()}`);
+      console.log(`   Token length: ${tokenResponse.accessToken.length} characters`);
+      
+      return {
+        accessToken: tokenResponse.accessToken,
+        expiresOn: expiresOn,
+        account: undefined // Azure CLI doesn't provide account info in the same format
+      };
+      
+    } catch (error) {
+      console.error("❌ Azure CLI authentication failed:", error instanceof Error ? error.message : String(error));
+      console.error("🔧 Troubleshooting steps:");
+      console.error("   1. Ensure Azure CLI is installed: az --version");
+      console.error("   2. Ensure you're logged in: az account show");
+      console.error("   3. Try refreshing login: az account get-access-token --scope https://api.fabric.microsoft.com/.default");
+      throw new Error(`Azure CLI authentication failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  /**
+   * Check Azure CLI installation and login status
+   */
+  private async checkAzureCliStatus(): Promise<void> {
+    try {
+      // Check if Azure CLI is installed
+      await execAsync('az --version');
+      console.log("✅ Azure CLI is installed");
+      
+      // Check if user is logged in
+      const { stdout } = await execAsync('az account show --output json');
+      const account = JSON.parse(stdout);
+      
+      if (!account || !account.id) {
+        throw new Error("No Azure account found. Please run 'az login' first.");
+      }
+      
+      console.log(`✅ Logged in as: ${account.user?.name || account.user?.type || 'Unknown'}`);
+      console.log(`   Subscription: ${account.name} (${account.id})`);
+      console.log(`   Tenant: ${account.tenantId}`);
+      
+      // Test access to Microsoft Fabric specifically
+      try {
+        await execAsync('az account get-access-token --scope "https://api.fabric.microsoft.com/.default" --query "accessToken" --output tsv');
+        console.log("✅ Microsoft Fabric API access confirmed");
+      } catch (fabricError) {
+        console.warn("⚠️  Warning: Could not verify Fabric API access, but authentication may still work");
+        console.warn(`    Error: ${fabricError instanceof Error ? fabricError.message : String(fabricError)}`);
+      }
+      
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      
+      if (errorMessage.includes('az: command not found') || errorMessage.includes("'az' is not recognized")) {
+        throw new Error(`
+Azure CLI is not installed or not in PATH. 
+Please install Azure CLI from: https://docs.microsoft.com/en-us/cli/azure/install-azure-cli
+Then run 'az login' to authenticate.`);
+      }
+      
+      if (errorMessage.includes('Please run')) {
+        throw new Error(`
+Azure CLI is installed but you are not logged in.
+Please run 'az login' to authenticate with your Azure account.`);
+      }
+      
+      throw error;
+    }
+  }
+
+  /**
+   * Validate that Azure CLI authentication is properly configured for MCP usage
+   * This is useful for troubleshooting Claude Desktop integration
+   */
+  async validateAzureCliForMCP(): Promise<{valid: boolean, message: string, recommendations?: string[]}> {
+    try {
+      console.log("🔍 Validating Azure CLI configuration for MCP usage...");
+      
+      // Step 1: Check Azure CLI installation
+      await execAsync('az --version');
+      
+      // Step 2: Check login status
+      const { stdout: accountInfo } = await execAsync('az account show --output json');
+      const account = JSON.parse(accountInfo);
+      
+      if (!account || !account.id) {
+        return {
+          valid: false,
+          message: "Azure CLI not logged in",
+          recommendations: [
+            "Run 'az login' to authenticate",
+            "Ensure you have access to Microsoft Fabric in your tenant"
+          ]
+        };
+      }
+      
+      // Step 3: Test Fabric token acquisition
+      const { stdout: tokenInfo } = await execAsync('az account get-access-token --scope "https://api.fabric.microsoft.com/.default" --output json');
+      const tokenResponse = JSON.parse(tokenInfo);
+      
+      if (!tokenResponse.accessToken) {
+        return {
+          valid: false,
+          message: "Cannot acquire Fabric access token",
+          recommendations: [
+            "Verify you have Microsoft Fabric permissions",
+            "Check if your tenant has Fabric enabled",
+            "Try running: az account get-access-token --scope https://api.fabric.microsoft.com/.default"
+          ]
+        };
+      }
+      
+      // Step 4: Test a simple Fabric API call
+      try {
+        await execAsync(`az rest --method GET --url "https://api.fabric.microsoft.com/v1/workspaces" --resource "https://api.fabric.microsoft.com/" --query "value[0:1]"`);
+        
+        return {
+          valid: true,
+          message: `Azure CLI authentication configured correctly for user: ${account.user?.name || 'Unknown'}`
+        };
+      } catch (_apiError) {
+        return {
+          valid: false,
+          message: "Token acquired but Fabric API call failed",
+          recommendations: [
+            "Verify you have permissions to access Microsoft Fabric",
+            "Check if your organization allows Fabric API access",
+            "Contact your administrator about Fabric access permissions"
+          ]
+        };
+      }
+      
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      
+      if (errorMessage.includes('az: command not found') || errorMessage.includes("'az' is not recognized")) {
+        return {
+          valid: false,
+          message: "Azure CLI not installed",
+          recommendations: [
+            "Install Azure CLI from: https://docs.microsoft.com/en-us/cli/azure/install-azure-cli",
+            "Add Azure CLI to your system PATH",
+            "Restart your terminal/VS Code after installation"
+          ]
+        };
+      }
+      
+      return {
+        valid: false,
+        message: `Azure CLI validation failed: ${errorMessage}`,
+        recommendations: [
+          "Ensure Azure CLI is properly installed",
+          "Run 'az login' to authenticate",
+          "Check your network connection"
+        ]
+      };
     }
   }
 }

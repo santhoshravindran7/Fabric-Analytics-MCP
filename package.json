@@ -15,6 +15,18 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "test:pre-push": "node test-before-push.js",
+    "test:azure-cli": "node scripts/test-azure-cli-auth.cjs",
+    "test:mcp-azure-cli": "node scripts/test-mcp-azure-cli.cjs",
+    "test:all": "node scripts/test-all-functionality.cjs",
+    "test:crud": "node scripts/test-crud-operations.cjs",
+    "test:notebooks": "node scripts/test-notebook-management.cjs",
+    "test:livy": "node scripts/test-livy-integration.cjs",
+    "test:spark": "node scripts/test-spark-monitoring.cjs",
+    "test:suite": "node scripts/run-all-tests.cjs",
+    "setup:e2e": "node setup-e2e.cjs",
+    "test:e2e": "node test-end-to-end.cjs",
+    "setup:claude": "node setup-claude-test.cjs",
+    "quick-start": "node quick-start-claude.cjs",
     "validate": "node validate.js",
     "final-check": "node final-check.js",
     "lint": "eslint src/**/*.ts",
@@ -76,6 +88,7 @@
   "dependencies": {
     "@azure/msal-node": "^2.16.2",
     "@modelcontextprotocol/sdk": "^1.13.0",
+    "child_process": "^1.0.2",
     "zod": "^3.25.67"
   }
 }
