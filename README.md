@@ -32,7 +32,7 @@ A comprehensive Model Context Protocol (MCP) server that provides analytics capa
 - **⚡ Livy API Integration** - Full Spark session and batch job management
 - **📊 Spark Application Monitoring** - Real-time monitoring across workspaces and items
 - **🤖 Claude Desktop Ready** - Plug-and-play integration with Claude Desktop
-- **🔐 Enterprise Authentication** - Multiple auth methods (Bearer, Service Principal, Device Code, Interactive)
+- **🔐 Enterprise Authentication** - Multiple auth methods (Bearer, Service Principal, Device Code, Interactive, Azure CLI)
 - **🛡️ MSAL Integration** - Microsoft Authentication Library for secure enterprise access
 - **📈 Analytics & Insights** - Generate comprehensive monitoring dashboards
 - **🧪 Comprehensive Testing** - Extensive test suite with real API validation
@@ -657,6 +657,34 @@ export FABRIC_CLIENT_ID="your-client-id"
 export FABRIC_TENANT_ID="your-tenant-id"
 ```
 
+#### **🔧 5. Azure CLI Authentication** ⭐ **(Recommended for Local Development)**
+Use your existing Azure CLI login for seamless local testing:
+```bash
+export FABRIC_AUTH_METHOD="azure_cli"
+```
+
+**Prerequisites**:
+1. Install Azure CLI: `winget install Microsoft.AzureCLI` (Windows) or [Download](https://aka.ms/installazurecliwindows)
+2. Login to Azure: `az login`
+3. Set active subscription: `az account set --subscription "your-subscription-name"`
+
+**Benefits**:
+- ✅ **Zero Configuration** - Uses your existing Azure login
+- ✅ **Instant Setup** - No app registration or client secrets needed
+- ✅ **Multi-Account Support** - Switch Azure accounts easily
+- ✅ **Perfect for Development** - Seamless local testing experience
+
+**Quick Test**:
+```powershell
+# Verify Azure CLI setup
+npm run test:azure-cli
+
+# Start MCP server with Azure CLI auth
+$env:FABRIC_AUTH_METHOD="azure_cli"; npm start
+```
+
+> 💡 **Pro Tip**: Azure CLI authentication is perfect for developers who want to quickly test the MCP server without complex Azure AD app setup. Just `az login` and you're ready to go!
+
 #### **🔧 Complete Authentication Setup**
 
 📚 **Detailed Guides**:
@@ -899,6 +927,123 @@ This server includes:
 - Data model analysis (template implementation)
 
 ## 🧪 **Testing**
+
+### **🚀 End-to-End Testing**
+
+The MCP server includes comprehensive end-to-end testing that creates real workspaces, items, and jobs to validate complete functionality using Azure CLI authentication.
+
+#### **Quick Setup for E2E Testing**
+```bash
+# 1. Set up end-to-end testing environment
+npm run setup:e2e
+
+# 2. Run the comprehensive end-to-end test
+npm run test:e2e
+```
+
+#### **What the E2E Test Does**
+The end-to-end test creates a complete workflow in your Microsoft Fabric tenant:
+
+1. **🔐 Validates Azure CLI Authentication** - Uses your existing `az login` session
+2. **🏗️ Creates a Test Workspace** - New workspace with unique naming
+3. **⚡ Attaches to Capacity** - Links workspace to your Fabric capacity (optional)
+4. **📓 Creates Notebooks & Lakehouses** - Test items for validation
+5. **🏃 Runs Real Jobs** - Executes notebook with actual Spark code
+6. **📊 Monitors Execution** - Tracks job status and completion
+7. **🧹 Cleans Up Resources** - Removes all created test resources
+
+#### **E2E Test Configuration**
+
+The setup script creates a `.env.e2e` configuration file:
+
+```bash
+# Example configuration
+FABRIC_CAPACITY_ID=your-capacity-id-here    # Optional: for capacity testing
+E2E_TEST_TIMEOUT=300000                      # 5 minutes per operation
+E2E_CLEANUP_ON_FAILURE=true                 # Clean up on test failure
+E2E_RETRY_COUNT=3                           # Retry failed operations
+```
+
+#### **E2E Test Features**
+
+- ✅ **Real Resource Creation** - Creates actual Fabric workspaces and items
+- ✅ **Azure CLI Integration** - Uses your existing Azure authentication
+- ✅ **Capacity Assignment** - Tests workspace-to-capacity attachment
+- ✅ **Job Execution** - Runs real Spark jobs and monitors completion
+- ✅ **Automatic Cleanup** - Removes all test resources automatically
+- ✅ **Comprehensive Logging** - Detailed logging of all operations
+- ✅ **Error Handling** - Robust error handling and recovery
+
+#### **Prerequisites for E2E Testing**
+
+1. **Azure CLI** installed and logged in:
+   ```bash
+   az login
+   ```
+
+2. **Microsoft Fabric Access** with permissions to:
+   - Create workspaces
+   - Create notebooks and lakehouses
+   - Run Spark jobs
+   - (Optional) Assign workspaces to capacity
+
+3. **Fabric Capacity** (optional but recommended):
+   - Set `FABRIC_CAPACITY_ID` in `.env.e2e` for capacity testing
+   - Without capacity, workspace will use shared capacity
+
+#### **Running E2E Tests**
+
+```bash
+# Complete setup and run
+npm run setup:e2e && npm run test:e2e
+
+# Or run individual steps
+npm run setup:e2e          # Set up environment
+npm run test:e2e           # Run end-to-end test
+
+# Direct execution
+node setup-e2e.cjs         # Setup script
+node test-end-to-end.cjs   # Test script
+```
+
+#### **E2E Test Output**
+
+The test provides comprehensive output including:
+
+```
+🚀 Starting End-to-End Test for Microsoft Fabric Analytics MCP Server
+✅ MCP Server Startup (1234ms)
+✅ Azure CLI Authentication
+✅ Workspace Creation
+✅ Capacity Attachment
+✅ Notebook Creation
+✅ Lakehouse Creation
+✅ Item Validation
+✅ Job Execution
+
+📊 TEST SUMMARY
+================
+✅ MCP Server Startup (2341ms)
+✅ Azure CLI Authentication
+✅ Workspace Creation
+✅ Capacity Attachment
+✅ Notebook Creation
+✅ Lakehouse Creation
+✅ Item Validation  
+✅ Job Execution
+
+Total: 8 | Passed: 8 | Failed: 0
+```
+
+#### **⚠️ Important Notes for E2E Testing**
+
+- **Creates Real Resources**: The test creates actual workspaces and items in your Fabric tenant
+- **Requires Permissions**: Ensure you have necessary Fabric permissions
+- **Uses Capacity**: Jobs may consume capacity units if using dedicated capacity
+- **Automatic Cleanup**: All resources are automatically deleted after testing
+- **Network Dependent**: Requires stable internet connection for API calls
+
+### **🧪 Unit & Integration Testing**
 
 ### **Prerequisites**
 ```bash

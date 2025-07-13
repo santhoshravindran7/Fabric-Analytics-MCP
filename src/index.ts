@@ -42,9 +42,12 @@ let authClient: MicrosoftAuthClient | null = null;
  * Initialize authentication client if needed
  */
 function initializeAuthClient(): void {
-  if (!authClient && authConfig.clientId && authConfig.method !== AuthMethod.BEARER_TOKEN) {
+  if (!authClient && authConfig.method !== AuthMethod.BEARER_TOKEN) {
+    // For Azure CLI, we still need a client instance even without clientId
+    const clientId = authConfig.clientId || "04b07795-8ddb-461a-bbee-02f9e1bf7b46"; // Default Azure CLI client ID
+    
     authClient = new MicrosoftAuthClient({
-      clientId: authConfig.clientId,
+      clientId: clientId,
       clientSecret: authConfig.clientSecret,
       authority: authConfig.tenantId ? `https://login.microsoftonline.com/${authConfig.tenantId}` : undefined
     });
@@ -55,8 +58,38 @@ function initializeAuthClient(): void {
  * Get or refresh authentication token with timeout protection for Claude Desktop
  */
 async function getAuthToken(): Promise<string | null> {
-  // If using bearer token method or no auth configured, return null (use simulation)
-  if (authConfig.method === AuthMethod.BEARER_TOKEN || !authConfig.clientId) {
+  // If using bearer token method, return null (use simulation or environment token)
+  if (authConfig.method === AuthMethod.BEARER_TOKEN) {
+    return null;
+  }
+
+  // For Azure CLI, we don't need a clientId from config
+  if (authConfig.method === AuthMethod.AZURE_CLI) {
+    // Check if we have a valid cached token
+    if (cachedAuthResult && cachedAuthResult.expiresOn > new Date()) {
+      return cachedAuthResult.accessToken;
+    }
+
+    // Initialize auth client for Azure CLI
+    initializeAuthClient();
+    if (!authClient) {
+      console.error("Authentication client not initialized");
+      return null;
+    }
+
+    try {
+      cachedAuthResult = await authClient.authenticateWithAzureCli();
+      console.error(`✅ Azure CLI authentication successful`);
+      return cachedAuthResult.accessToken;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error(`❌ Azure CLI authentication failed: ${errorMessage}`);
+      return null;
+    }
+  }
+
+  // For other methods, require clientId
+  if (!authConfig.clientId) {
     return null;
   }
 
@@ -132,6 +165,9 @@ async function performAuthentication(): Promise<AuthResult> {
         authConfig.clientId!,
         authConfig.tenantId
       );
+
+    case AuthMethod.AZURE_CLI:
+      return await authClient.authenticateWithAzureCli();
 
     default:
       throw new Error(`Unsupported authentication method: ${authConfig.method}`);
@@ -1962,250 +1998,864 @@ function createHealthServer(): http.Server {
   return healthServer;
 }
 
-// ==================== NOTEBOOK MANAGEMENT TOOLS ====================
+// ==================== WORKSPACE MANAGEMENT TOOLS ====================
 
 server.tool(
-  "create-fabric-notebook",
-  "Create a new Fabric notebook from template or custom definition",
-  CreateNotebookFromTemplateSchema.shape,
-  async ({ bearerToken, workspaceId, displayName, template, customNotebook, environmentId, lakehouseId, lakehouseName }) => {
-    // Get the notebook definition from template or custom
-    let notebookDefinition;
-    if (template === "custom") {
-      if (!customNotebook) {
-        return {
-          content: [{ type: "text", text: "Error: customNotebook is required when template is 'custom'" }]
-        };
-      }
-      notebookDefinition = customNotebook;
-    } else {
-      notebookDefinition = getNotebookTemplate(template);
-    }
-
-    // Enhance metadata with dependencies if provided
-    if (environmentId || lakehouseId) {
-      if (!notebookDefinition.metadata) {
-        notebookDefinition.metadata = {};
-      }
-      if (!notebookDefinition.metadata.dependencies) {
-        notebookDefinition.metadata.dependencies = {};
-      }
-      
-      if (environmentId) {
-        notebookDefinition.metadata.dependencies.environment = {
-          environmentId,
-          workspaceId
-        };
-      }
-      
-      if (lakehouseId) {
-        notebookDefinition.metadata.dependencies.lakehouse = {
-          default_lakehouse: lakehouseId,
-          default_lakehouse_name: lakehouseName || "Default Lakehouse",
-          default_lakehouse_workspace_id: workspaceId
-        };
+  "fabric_list_workspaces",
+  {
+    description: "List all workspaces accessible to the user",
+    inputSchema: {
+      type: "object",
+      properties: {
+        filter: { type: "string", description: "Optional filter for workspace names" },
+        top: { type: "number", description: "Maximum number of workspaces to return (default: 100)" },
+        token: { type: "string", description: "Optional bearer token if not using configured authentication" }
       }
     }
-
-    // Encode notebook definition as base64
-    const notebookContent = JSON.stringify(notebookDefinition);
-    const base64Content = Buffer.from(notebookContent).toString('base64');
-
+  },
+  async (request) => {
+    const { filter, top = 100, token } = request.params;
+    
     const result = await executeApiCall(
-      bearerToken,
-      workspaceId,
-      "create-notebook",
-      (client) => client.createNotebook({
-        displayName,
-        type: "Notebook",
-        definition: {
-          format: "ipynb",
-          parts: [
-            {
-              path: "notebook-content.ipynb",
-              payload: base64Content,
-              payloadType: "InlineBase64"
-            }
-          ]
-        }
-      }),
-      { displayName, template, notebookDefinition }
+      token,
+      authConfig.defaultWorkspaceId || "global",
+      "list-workspaces",
+      (client) => client.listWorkspaces(filter, top),
+      { filter, top }
     );
 
     if (result.status === 'error') {
       return {
-        content: [{ type: "text", text: `Error creating notebook: ${result.error}` }]
+        content: [{ type: "text", text: `Error: ${result.error}` }]
       };
     }
+
+    const workspacesResponse = result.data as { value: import('./fabric-client').WorkspaceInfo[] };
+    const workspaces = workspacesResponse?.value || [];
+    const workspacesList = workspaces.map((ws) => 
+      `- ${ws.name} (ID: ${ws.id})\n  Type: ${ws.type}\n  Capacity: ${ws.capacityId || 'None'}\n  Is On Dedicated Capacity: ${ws.isOnDedicatedCapacity || false}`
+    ).join('\n\n');
 
     return {
       content: [{
         type: "text",
-        text: `Successfully created notebook: "${displayName}"\nID: ${result.data?.id}\nTemplate: ${template}\nCreated: ${result.data?.createdDate}`
-
+        text: `Available Workspaces (${workspaces.length}):\n\n${workspacesList}`
       }]
     };
   }
 );
 
 server.tool(
-  "get-fabric-notebook-definition",
-  "Get the notebook definition (cells, metadata) from an existing Fabric notebook",
-  GetNotebookDefinitionSchema.shape,
-  async ({ bearerToken, workspaceId, notebookId, format }) => {
+  "fabric_create_workspace",
+  {
+    description: "Create a new workspace",
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Name of the workspace" },
+        description: { type: "string", description: "Optional description of the workspace" },
+        token: { type: "string", description: "Optional bearer token if not using configured authentication" }
+      },
+      required: ["name"]
+    }
+  },
+  async (request) => {
+    const { name, description, token } = request.params;
+    
     const result = await executeApiCall(
-      bearerToken,
-      workspaceId,
-      "get-notebook-definition",
-      (client) => client.getItemDefinition(notebookId, format),
-      { notebookId, format }
+      token,
+      authConfig.defaultWorkspaceId || "global",
+      "create-workspace",
+      (client) => client.createWorkspace(name, description),
+      { name, description }
     );
 
     if (result.status === 'error') {
       return {
-        content: [{ type: "text", text: `Error getting notebook definition: ${result.error}` }]
+        content: [{ type: "text", text: `Error: ${result.error}` }]
       };
     }
 
-    try {
-      // Parse the notebook content
-      let notebookContent = "";
-      const responseData = result.data as any;
-      if (responseData?.definition?.parts && responseData.definition.parts.length > 0) {
-        const part = responseData.definition.parts[0];
-        if (part.payloadType === "InlineBase64" && part.payload) {
-          notebookContent = Buffer.from(part.payload, 'base64').toString('utf-8');
-        } else {
-          notebookContent = part.payload || "{}";
-        }
-      }
-
-      const notebookDef = JSON.parse(notebookContent || "{}");
-      
-      return {
-        content: [{
-          type: "text",
-          text: `Notebook Definition Retrieved:\n\nName: ${responseData?.displayName || 'Unknown'}\nFormat: ${format}\nCells: ${notebookDef.cells?.length || 0}\n\nDefinition:\n${JSON.stringify(notebookDef, null, 2)}`
-        }]
-      };
-    } catch (parseError) {
-      return {
-        content: [{ type: "text", text: `Error parsing notebook definition: ${parseError}` }]
-      };
-    }
-  }
-);
-
-server.tool(
-  "update-fabric-notebook-definition",
-  "Update the notebook definition (cells, metadata) of an existing Fabric notebook",
-  UpdateNotebookDefinitionSchema.shape,
-  async ({ bearerToken, workspaceId, notebookId, notebookDefinition }) => {
-    // Encode updated notebook definition as base64
-    const notebookContent = JSON.stringify(notebookDefinition);
-    const base64Content = Buffer.from(notebookContent).toString('base64');
-
-    const result = await executeApiCall(
-      bearerToken,
-      workspaceId,
-      "update-notebook-definition",
-      (client) => client.updateItemDefinition(notebookId, {
-        format: "ipynb",
-        parts: [
-          {
-            path: "notebook-content.ipynb",
-            payload: base64Content,
-            payloadType: "InlineBase64"
-          }
-        ]
-      }),
-      { notebookId, notebookDefinition }
-    );
-
-    if (result.status === 'error') {
-      return {
-        content: [{ type: "text", text: `Error updating notebook definition: ${result.error}` }]
-      };
-    }
-
+    const workspace = result.data as { id: string };
     return {
       content: [{
         type: "text",
-        text: `Successfully updated notebook definition for notebook ID: ${notebookId}\nCells: ${notebookDefinition.cells?.length || 0}\nUpdated: ${new Date().toISOString()}`
+        text: `Successfully created workspace: ${name}\nID: ${workspace.id}\nDescription: ${description || 'None'}`
       }]
     };
   }
 );
 
 server.tool(
-  "run-fabric-notebook",
-  "Execute a Fabric notebook on-demand with optional parameters and configuration",
-  RunNotebookSchema.shape,
-  async ({ bearerToken, workspaceId, notebookId, parameters, configuration }) => {
-    const executionPayload: any = {
-      notebookId
-    };
-
-    // Add parameters if provided
-    if (parameters && Object.keys(parameters).length > 0) {
-      executionPayload.parameters = {};
-      for (const [key, param] of Object.entries(parameters)) {
-        executionPayload.parameters[key] = {
-          value: param.value,
-          type: param.type
-        };
-      }
+  "fabric_delete_workspace",
+  {
+    description: "Delete a workspace",
+    inputSchema: {
+      type: "object",
+      properties: {
+        workspaceId: { type: "string", description: "ID of the workspace to delete" },
+        token: { type: "string", description: "Optional bearer token if not using configured authentication" }
+      },
+      required: ["workspaceId"]
     }
-
-    // Add configuration if provided
-    if (configuration) {
-      executionPayload.executionData = {};
-      
-      if (configuration.conf) {
-        executionPayload.executionData.conf = configuration.conf;
-      }
-      
-      if (configuration.environment) {
-        executionPayload.executionData.environmentId = {
-          environmentId: configuration.environment.id,
-          workspaceId
-        };
-      }
-      
-      if (configuration.defaultLakehouse) {
-        executionPayload.executionData.defaultLakehouseId = {
-          lakehouseId: configuration.defaultLakehouse.id,
-          workspaceId: configuration.defaultLakehouse.workspaceId || workspaceId
-        };
-      }
-      
-      if (configuration.useStarterPool) {
-        executionPayload.executionData.useStarterPool = true;
-      }
-      
-      if (configuration.useWorkspacePool) {
-        executionPayload.executionData.useWorkspacePool = configuration.useWorkspacePool;
-      }
-    }
-
+  },
+  async (request) => {
+    const { workspaceId, token } = request.params;
+    
     const result = await executeApiCall(
-      bearerToken,
+      token,
       workspaceId,
-      "run-notebook",
-      (client) => client.runNotebook(notebookId, executionPayload),
-      { notebookId, executionPayload }
+      "delete-workspace",
+      (client) => client.deleteWorkspace(workspaceId),
+      { workspaceId }
     );
 
     if (result.status === 'error') {
       return {
-        content: [{ type: "text", text: `Error running notebook: ${result.error}` }]
+        content: [{ type: "text", text: `Error: ${result.error}` }]
       };
     }
 
     return {
       content: [{
         type: "text",
-        text: `Successfully started notebook execution:\nNotebook ID: ${notebookId}\nJob ID: ${(result.data as any)?.id || 'N/A'}\nStatus: ${(result.data as any)?.status || 'Started'}\nStarted: ${new Date().toISOString()}`
+        text: `Successfully deleted workspace: ${workspaceId}`
+      }]
+    };
+  }
+);
+
+server.tool(
+  "fabric_assign_workspace_to_capacity",
+  {
+    description: "Assign a workspace to a capacity",
+    inputSchema: {
+      type: "object",
+      properties: {
+        workspaceId: { type: "string", description: "ID of the workspace" },
+        capacityId: { type: "string", description: "ID of the capacity" },
+        token: { type: "string", description: "Optional bearer token if not using configured authentication" }
+      },
+      required: ["workspaceId", "capacityId"]
+    }
+  },
+  async (request) => {
+    const { workspaceId, capacityId, token } = request.params;
+    
+    const result = await executeApiCall(
+      token,
+      workspaceId,
+      "assign-workspace-to-capacity",
+      (client) => client.assignWorkspaceToCapacity(workspaceId, capacityId),
+      { workspaceId, capacityId }
+    );
+
+    if (result.status === 'error') {
+      return {
+        content: [{ type: "text", text: `Error: ${result.error}` }]
+      };
+    }
+
+    return {
+      content: [{
+        type: "text",
+        text: `Successfully assigned workspace ${workspaceId} to capacity ${capacityId}`
+      }]
+    };
+  }
+);
+
+// ==================== CAPACITY MANAGEMENT TOOLS ====================
+
+server.tool(
+  "fabric_list_capacities",
+  {
+    description: "List all available capacities",
+    inputSchema: {
+      type: "object",
+      properties: {
+        token: { type: "string", description: "Optional bearer token if not using configured authentication" }
+      }
+    }
+  },
+  async (request) => {
+    const { token } = request.params;
+    
+    const result = await executeApiCall(
+      token,
+      authConfig.defaultWorkspaceId || "global",
+      "list-capacities",
+      (client) => client.listCapacities(),
+      {}
+    );
+
+    if (result.status === 'error') {
+      return {
+        content: [{ type: "text", text: `Error: ${result.error}` }]
+      };
+    }
+
+    return {
+      content: [{
+        type: "text",
+        text: `Available Capacities:\n${JSON.stringify(result.data, null, 2)}`
+      }]
+    };
+  }
+);
+
+server.tool(
+  "fabric_get_capacity_details",
+  {
+    description: "Get detailed information about a specific capacity",
+    inputSchema: {
+      type: "object",
+      properties: {
+        capacityId: { type: "string", description: "ID of the capacity" },
+        token: { type: "string", description: "Optional bearer token if not using configured authentication" }
+      },
+      required: ["capacityId"]
+    }
+  },
+  async (request) => {
+    const { capacityId, token } = request.params;
+    
+    const result = await executeApiCall(
+      token,
+      authConfig.defaultWorkspaceId || "global",
+      "get-capacity",
+      (client) => client.getCapacity(capacityId),
+      { capacityId }
+    );
+
+    if (result.status === 'error') {
+      return {
+        content: [{ type: "text", text: `Error: ${result.error}` }]
+      };
+    }
+
+    return {
+      content: [{
+        type: "text",
+        text: `Capacity Details:\n${JSON.stringify(result.data, null, 2)}`
+      }]
+    };
+  }
+);
+
+server.tool(
+  "fabric_get_capacity_workloads",
+  {
+    description: "Get workload configuration for a capacity",
+    inputSchema: {
+      type: "object",
+      properties: {
+        capacityId: { type: "string", description: "ID of the capacity" },
+        token: { type: "string", description: "Optional bearer token if not using configured authentication" }
+      },
+      required: ["capacityId"]
+    }
+  },
+  async (request) => {
+    const { capacityId, token } = request.params;
+    
+    const result = await executeApiCall(
+      token,
+      authConfig.defaultWorkspaceId || "global",
+      "get-capacity-workloads",
+      (client) => client.getCapacityWorkloads(capacityId),
+      { capacityId }
+    );
+
+    if (result.status === 'error') {
+      return {
+        content: [{ type: "text", text: `Error: ${result.error}` }]
+      };
+    }
+
+    return {
+      content: [{
+        type: "text",
+        text: `Capacity Workloads:\n${JSON.stringify(result.data, null, 2)}`
+      }]
+    };
+  }
+);
+
+// ==================== DATA PIPELINE MANAGEMENT TOOLS ====================
+
+server.tool(
+  "fabric_list_data_pipelines",
+  {
+    description: "List all data pipelines in a workspace",
+    inputSchema: {
+      type: "object",
+      properties: {
+        workspaceId: { type: "string", description: "ID of the workspace" },
+        token: { type: "string", description: "Optional bearer token if not using configured authentication" }
+      },
+      required: ["workspaceId"]
+    }
+  },
+  async (request) => {
+    const { workspaceId, token } = request.params;
+    
+    const result = await executeApiCall(
+      token,
+      workspaceId,
+      "list-data-pipelines",
+      (client) => client.listDataPipelines(workspaceId),
+      { workspaceId }
+    );
+
+    if (result.status === 'error') {
+      return {
+        content: [{ type: "text", text: `Error: ${result.error}` }]
+      };
+    }
+
+    return {
+      content: [{
+        type: "text",
+        text: `Data Pipelines in workspace ${workspaceId}:\n${JSON.stringify(result.data, null, 2)}`
+      }]
+    };
+  }
+);
+
+server.tool(
+  "fabric_create_data_pipeline",
+  {
+    description: "Create a new data pipeline in a workspace",
+    inputSchema: {
+      type: "object",
+      properties: {
+        workspaceId: { type: "string", description: "ID of the workspace" },
+        displayName: { type: "string", description: "Name of the pipeline" },
+        description: { type: "string", description: "Optional description of the pipeline" },
+        token: { type: "string", description: "Optional bearer token if not using configured authentication" }
+      },
+      required: ["workspaceId", "displayName"]
+    }
+  },
+  async (request) => {
+    const { workspaceId, displayName, description, token } = request.params;
+    
+    const result = await executeApiCall(
+      token,
+      workspaceId,
+      "create-data-pipeline",
+      (client) => client.createDataPipeline(workspaceId, displayName, description),
+      { workspaceId, displayName, description }
+    );
+
+    if (result.status === 'error') {
+      return {
+        content: [{ type: "text", text: `Error: ${result.error}` }]
+      };
+    }
+
+    return {
+      content: [{
+        type: "text",
+        text: `Successfully created data pipeline:\n${JSON.stringify(result.data, null, 2)}`
+      }]
+    };
+  }
+);
+
+server.tool(
+  "fabric_run_data_pipeline",
+  {
+    description: "Run/trigger a data pipeline",
+    inputSchema: {
+      type: "object",
+      properties: {
+        workspaceId: { type: "string", description: "ID of the workspace" },
+        pipelineId: { type: "string", description: "ID of the pipeline" },
+        jobType: { type: "string", description: "Type of job to run (default: Pipeline)" },
+        executionData: { type: "object", description: "Optional execution parameters" },
+        token: { type: "string", description: "Optional bearer token if not using configured authentication" }
+      },
+      required: ["workspaceId", "pipelineId"]
+    }
+  },
+  async (request) => {
+    const { workspaceId, pipelineId, jobType, executionData, token } = request.params;
+    
+    const result = await executeApiCall(
+      token,
+      workspaceId,
+      "run-data-pipeline",
+      (client) => client.runDataPipeline(workspaceId, pipelineId, jobType, executionData),
+      { workspaceId, pipelineId, jobType, executionData }
+    );
+
+    if (result.status === 'error') {
+      return {
+        content: [{ type: "text", text: `Error: ${result.error}` }]
+      };
+    }
+
+    return {
+      content: [{
+        type: "text",
+        text: `Successfully started pipeline run:\n${JSON.stringify(result.data, null, 2)}`
+      }]
+    };
+  }
+);
+
+server.tool(
+  "fabric_get_pipeline_run_status",
+  {
+    description: "Get the status of a pipeline run",
+    inputSchema: {
+      type: "object",
+      properties: {
+        workspaceId: { type: "string", description: "ID of the workspace" },
+        pipelineId: { type: "string", description: "ID of the pipeline" },
+        runId: { type: "string", description: "ID of the run" },
+        token: { type: "string", description: "Optional bearer token if not using configured authentication" }
+      },
+      required: ["workspaceId", "pipelineId", "runId"]
+    }
+  },
+  async (request) => {
+    const { workspaceId, pipelineId, runId, token } = request.params;
+    
+    const result = await executeApiCall(
+      token,
+      workspaceId,
+      "get-pipeline-run-status",
+      (client) => client.getPipelineRunStatus(workspaceId, pipelineId, runId),
+      { workspaceId, pipelineId, runId }
+    );
+
+    if (result.status === 'error') {
+      return {
+        content: [{ type: "text", text: `Error: ${result.error}` }]
+      };
+    }
+
+    return {
+      content: [{
+        type: "text",
+        text: `Pipeline run status:\n${JSON.stringify(result.data, null, 2)}`
+      }]
+    };
+  }
+);
+
+// ==================== ENVIRONMENT MANAGEMENT TOOLS ====================
+
+server.tool(
+  "fabric_list_environments",
+  {
+    description: "List all environments in a workspace",
+    inputSchema: {
+      type: "object",
+      properties: {
+        workspaceId: { type: "string", description: "ID of the workspace" },
+        token: { type: "string", description: "Optional bearer token if not using configured authentication" }
+      },
+      required: ["workspaceId"]
+    }
+  },
+  async (request) => {
+    const { workspaceId, token } = request.params;
+    
+    const result = await executeApiCall(
+      token,
+      workspaceId,
+      "list-environments",
+      (client) => client.listEnvironments(workspaceId),
+      { workspaceId }
+    );
+
+    if (result.status === 'error') {
+      return {
+        content: [{ type: "text", text: `Error: ${result.error}` }]
+      };
+    }
+
+    return {
+      content: [{
+        type: "text",
+        text: `Environments in workspace ${workspaceId}:\n${JSON.stringify(result.data, null, 2)}`
+      }]
+    };
+  }
+);
+
+server.tool(
+  "fabric_create_environment",
+  {
+    description: "Create a new environment in a workspace",
+    inputSchema: {
+      type: "object",
+      properties: {
+        workspaceId: { type: "string", description: "ID of the workspace" },
+        displayName: { type: "string", description: "Name of the environment" },
+        description: { type: "string", description: "Optional description of the environment" },
+        token: { type: "string", description: "Optional bearer token if not using configured authentication" }
+      },
+      required: ["workspaceId", "displayName"]
+    }
+  },
+  async (request) => {
+    const { workspaceId, displayName, description, token } = request.params;
+    
+    const result = await executeApiCall(
+      token,
+      workspaceId,
+      "create-environment",
+      (client) => client.createEnvironment(workspaceId, displayName, description),
+      { workspaceId, displayName, description }
+    );
+
+    if (result.status === 'error') {
+      return {
+        content: [{ type: "text", text: `Error: ${result.error}` }]
+      };
+    }
+
+    return {
+      content: [{
+        type: "text",
+        text: `Successfully created environment:\n${JSON.stringify(result.data, null, 2)}`
+      }]
+    };
+  }
+);
+
+server.tool(
+  "fabric_publish_environment",
+  {
+    description: "Publish an environment from staging to live",
+    inputSchema: {
+      type: "object",
+      properties: {
+        workspaceId: { type: "string", description: "ID of the workspace" },
+        environmentId: { type: "string", description: "ID of the environment" },
+        token: { type: "string", description: "Optional bearer token if not using configured authentication" }
+      },
+      required: ["workspaceId", "environmentId"]
+    }
+  },
+  async (request) => {
+    const { workspaceId, environmentId, token } = request.params;
+    
+    const result = await executeApiCall(
+      token,
+      workspaceId,
+      "publish-environment",
+      (client) => client.publishEnvironment(workspaceId, environmentId),
+      { workspaceId, environmentId }
+    );
+
+    if (result.status === 'error') {
+      return {
+        content: [{ type: "text", text: `Error: ${result.error}` }]
+      };
+    }
+
+    return {
+      content: [{
+        type: "text",
+        text: `Successfully published environment ${environmentId}`
+      }]
+    };
+  }
+);
+
+// ==================== ENHANCED POWER BI TOOLS ====================
+
+server.tool(
+  "fabric_list_powerbi_dataflows",
+  {
+    description: "List all Power BI dataflows in a workspace",
+    inputSchema: {
+      type: "object",
+      properties: {
+        workspaceId: { type: "string", description: "ID of the workspace" },
+        token: { type: "string", description: "Optional bearer token if not using configured authentication" }
+      },
+      required: ["workspaceId"]
+    }
+  },
+  async (request) => {
+    const { workspaceId, token } = request.params;
+    
+    const result = await executeApiCall(
+      token,
+      workspaceId,
+      "list-powerbi-dataflows",
+      (client) => client.listPowerBIDataflows(workspaceId),
+      { workspaceId }
+    );
+
+    if (result.status === 'error') {
+      return {
+        content: [{ type: "text", text: `Error: ${result.error}` }]
+      };
+    }
+
+    return {
+      content: [{
+        type: "text",
+        text: `Power BI Dataflows in workspace ${workspaceId}:\n${JSON.stringify(result.data, null, 2)}`
+      }]
+    };
+  }
+);
+
+server.tool(
+  "fabric_refresh_powerbi_dataflow",
+  {
+    description: "Refresh a Power BI dataflow",
+    inputSchema: {
+      type: "object",
+      properties: {
+        workspaceId: { type: "string", description: "ID of the workspace" },
+        dataflowId: { type: "string", description: "ID of the dataflow" },
+        notifyOption: { type: "string", description: "Optional notification option" },
+        token: { type: "string", description: "Optional bearer token if not using configured authentication" }
+      },
+      required: ["workspaceId", "dataflowId"]
+    }
+  },
+  async (request) => {
+    const { workspaceId, dataflowId, notifyOption, token } = request.params;
+    
+    const result = await executeApiCall(
+      token,
+      workspaceId,
+      "refresh-powerbi-dataflow",
+      (client) => {
+        const refreshRequest = notifyOption ? { notifyOption } : undefined;
+        return client.refreshPowerBIDataflow(workspaceId, dataflowId, refreshRequest);
+      },
+      { workspaceId, dataflowId, notifyOption }
+    );
+
+    if (result.status === 'error') {
+      return {
+        content: [{ type: "text", text: `Error: ${result.error}` }]
+      };
+    }
+
+    return {
+      content: [{
+        type: "text",
+        text: `Successfully started dataflow refresh for ${dataflowId}`
+      }]
+    };
+  }
+);
+
+server.tool(
+  "fabric_list_powerbi_datamarts",
+  {
+    description: "List all Power BI datamarts in a workspace",
+    inputSchema: {
+      type: "object",
+      properties: {
+        workspaceId: { type: "string", description: "ID of the workspace" },
+        token: { type: "string", description: "Optional bearer token if not using configured authentication" }
+      },
+      required: ["workspaceId"]
+    }
+  },
+  async (request) => {
+    const { workspaceId, token } = request.params;
+    
+    const result = await executeApiCall(
+      token,
+      workspaceId,
+      "list-powerbi-datamarts",
+      (client) => client.listPowerBIDatamarts(workspaceId),
+      { workspaceId }
+    );
+
+    if (result.status === 'error') {
+      return {
+        content: [{ type: "text", text: `Error: ${result.error}` }]
+      };
+    }
+
+    return {
+      content: [{
+        type: "text",
+        text: `Power BI Datamarts in workspace ${workspaceId}:\n${JSON.stringify(result.data, null, 2)}`
+      }]
+    };
+  }
+);
+
+// ==================== ENHANCED LAKEHOUSE TOOLS ====================
+
+server.tool(
+  "fabric_get_lakehouse_sql_endpoint",
+  {
+    description: "Get SQL endpoint connection details for a lakehouse",
+    inputSchema: {
+      type: "object",
+      properties: {
+        workspaceId: { type: "string", description: "ID of the workspace" },
+        lakehouseId: { type: "string", description: "ID of the lakehouse" },
+        token: { type: "string", description: "Optional bearer token if not using configured authentication" }
+      },
+      required: ["workspaceId", "lakehouseId"]
+    }
+  },
+  async (request) => {
+    const { workspaceId, lakehouseId, token } = request.params;
+    
+    const result = await executeApiCall(
+      token,
+      workspaceId,
+      "get-lakehouse-sql-endpoint",
+      (client) => client.getLakehouseSQLEndpoint(workspaceId, lakehouseId),
+      { workspaceId, lakehouseId }
+    );
+
+    if (result.status === 'error') {
+      return {
+        content: [{ type: "text", text: `Error: ${result.error}` }]
+      };
+    }
+
+    return {
+      content: [{
+        type: "text",
+        text: `Lakehouse SQL Endpoint:\n${JSON.stringify(result.data, null, 2)}`
+      }]
+    };
+  }
+);
+
+server.tool(
+  "fabric_get_lakehouse_tables",
+  {
+    description: "Get tables information for a lakehouse",
+    inputSchema: {
+      type: "object",
+      properties: {
+        workspaceId: { type: "string", description: "ID of the workspace" },
+        lakehouseId: { type: "string", description: "ID of the lakehouse" },
+        token: { type: "string", description: "Optional bearer token if not using configured authentication" }
+      },
+      required: ["workspaceId", "lakehouseId"]
+    }
+  },
+  async (request) => {
+    const { workspaceId, lakehouseId, token } = request.params;
+    
+    const result = await executeApiCall(
+      token,
+      workspaceId,
+      "get-lakehouse-tables",
+      (client) => client.getLakehouseTables(workspaceId, lakehouseId),
+      { workspaceId, lakehouseId }
+    );
+
+    if (result.status === 'error') {
+      return {
+        content: [{ type: "text", text: `Error: ${result.error}` }]
+      };
+    }
+
+    return {
+      content: [{
+        type: "text",
+        text: `Lakehouse Tables:\n${JSON.stringify(result.data, null, 2)}`
+      }]
+    };
+  }
+);
+
+server.tool(
+  "fabric_load_data_to_lakehouse",
+  {
+    description: "Load data to a lakehouse table from a file or folder",
+    inputSchema: {
+      type: "object",
+      properties: {
+        workspaceId: { type: "string", description: "ID of the workspace" },
+        lakehouseId: { type: "string", description: "ID of the lakehouse" },
+        tableName: { type: "string", description: "Name of the table" },
+        relativePath: { type: "string", description: "Relative path to data file or folder" },
+        pathType: { type: "string", enum: ["File", "Folder"], description: "Type of path (File or Folder)" },
+        mode: { type: "string", enum: ["Append", "Overwrite"], description: "Load mode (Append or Overwrite)" },
+        token: { type: "string", description: "Optional bearer token if not using configured authentication" }
+      },
+      required: ["workspaceId", "lakehouseId", "tableName", "relativePath"]
+    }
+  },
+  async (request) => {
+    const { workspaceId, lakehouseId, tableName, relativePath, pathType = "File", mode = "Overwrite", token } = request.params;
+    
+    const result = await executeApiCall(
+      token,
+      workspaceId,
+      "load-data-to-lakehouse",
+      (client) => client.loadDataToLakehouse(workspaceId, lakehouseId, tableName, relativePath, pathType as 'File' | 'Folder', mode as 'Append' | 'Overwrite'),
+      { workspaceId, lakehouseId, tableName, relativePath, pathType, mode }
+    );
+
+    if (result.status === 'error') {
+      return {
+        content: [{ type: "text", text: `Error: ${result.error}` }]
+      };
+    }
+
+    return {
+      content: [{
+        type: "text",
+        text: `Successfully initiated data load to table ${tableName}:\n${JSON.stringify(result.data, null, 2)}`
+      }]
+    };
+  }
+);
+
+// ==================== ACTIVITY MONITORING TOOLS ====================
+
+server.tool(
+  "fabric_get_activity_events",
+  {
+    description: "Get activity events for monitoring and auditing",
+    inputSchema: {
+      type: "object",
+      properties: {
+        startDateTime: { type: "string", description: "Start date for activity logs (ISO format)" },
+        endDateTime: { type: "string", description: "End date for activity logs (ISO format)" },
+        token: { type: "string", description: "Optional bearer token if not using configured authentication" }
+      },
+      required: ["startDateTime", "endDateTime"]
+    }
+  },
+  async (request) => {
+    const { startDateTime, endDateTime, token } = request.params;
+    
+    const result = await executeApiCall(
+      token,
+      authConfig.defaultWorkspaceId || "global",
+      "get-activity-events",
+      (client) => client.getActivityEvents(startDateTime, endDateTime),
+      { startDateTime, endDateTime }
+    );
+
+    if (result.status === 'error') {
+      return {
+        content: [{ type: "text", text: `Error: ${result.error}` }]
+      };
+    }
+
+    return {
+      content: [{
+        type: "text",
+        text: `Activity Events from ${startDateTime} to ${endDateTime}:\n${JSON.stringify(result.data, null, 2)}`
       }]
     };
   }
