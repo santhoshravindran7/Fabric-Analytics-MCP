@@ -27,20 +27,121 @@ A comprehensive Model Context Protocol (MCP) server that provides analytics capa
 
 ## 🌟 **Key Features**
 
-- **🔄 Complete CRUD Operations** - Create, read, update, and delete Fabric items
-- **📓 Notebook Management** - Create, execute, and manage Fabric notebooks with templates
-- **⚡ Livy API Integration** - Full Spark session and batch job management
-- **📊 Spark Application Monitoring** - Real-time monitoring across workspaces and items
-- **🤖 Claude Desktop Ready** - Plug-and-play integration with Claude Desktop
-- **🔐 Enterprise Authentication** - Multiple auth methods (Bearer, Service Principal, Device Code, Interactive, Azure CLI)
-- **🛡️ MSAL Integration** - Microsoft Authentication Library for secure enterprise access
-- **📈 Analytics & Insights** - Generate comprehensive monitoring dashboards
-- **🧪 Comprehensive Testing** - Extensive test suite with real API validation
-- **🔄 Token Management** - Automatic token validation and expiration handling
-- **☸️ Enterprise Deployment** - Full Kubernetes and Azure deployment support
-- **🔄 Docker Support** - Containerized deployment with health checks
+- **🏗️ Complete Workspace Management** - Create, delete, and manage Fabric workspaces with capacity assignment
+- **🔄 Enhanced CRUD Operations** - Create, read, update, and delete all Fabric items (notebooks, lakehouses, datasets, reports)
+- **📓 Advanced Notebook Management** - Create, execute, and manage Fabric notebooks with 5 predefined templates
+- **⚡ Livy API Integration** - Full Spark session and batch job management with real-time monitoring
+- **📊 Comprehensive Spark Monitoring** - Real-time monitoring across workspaces, items, and applications
+- **🤖 Multi-AI Assistant Support** - Works with Claude Desktop, GitHub Copilot, and other MCP-compatible AI tools
+- **🔐 Enhanced Azure CLI Authentication** - Zero-config setup with automatic token management
+- **�️ Enterprise Authentication** - Multiple auth methods (Bearer, Service Principal, Device Code, Interactive, Azure CLI)
+- **📈 Analytics & Insights** - Generate comprehensive monitoring dashboards with real-time metrics
+- **🧪 End-to-End Testing** - Complete test suite with real workspace creation and job execution
+- **🔄 Advanced Token Management** - Automatic token validation, refresh, and expiration handling
+- **☸️ Enterprise Deployment** - Full Kubernetes and Azure deployment support with auto-scaling
+- **🔄 Docker Support** - Containerized deployment with health checks and monitoring
 - **📊 Monitoring & Observability** - Built-in Prometheus metrics and Grafana dashboards
 - **🚀 Azure MCP Server** - Native Azure hosting option (preview)
+- **🎯 48 Total Tools** - Comprehensive coverage of Fabric operations (up from 31 tools)
+
+## 🏗️ **New Workspace Management Features**
+
+### **🆕 Latest Updates - Comprehensive Workspace Operations**
+
+The MCP server now includes **21 new workspace management tools** that enable complete workspace lifecycle management:
+
+### **🌟 Core Workspace Operations**
+- **fabric_list_workspaces** - List all accessible workspaces with detailed metadata
+- **fabric_create_workspace** - Create new workspaces with custom configuration
+- **fabric_delete_workspace** - Delete workspaces with confirmation and cleanup
+- **fabric_update_workspace** - Update workspace properties and settings
+- **fabric_get_workspace** - Get detailed workspace information and status
+
+### **⚡ Capacity & Resource Management**
+- **fabric_list_capacities** - List all available Fabric capacities
+- **fabric_assign_workspace_to_capacity** - Attach workspaces to dedicated capacity
+- **fabric_unassign_workspace_from_capacity** - Move workspaces to shared capacity
+- **fabric_list_capacity_workspaces** - List all workspaces in a capacity
+
+### **👥 Access Control & Security**
+- **fabric_get_workspace_role_assignments** - View workspace permissions
+- **fabric_add_workspace_role_assignment** - Grant workspace access to users/groups
+- **fabric_update_workspace_role_assignment** - Modify user permissions
+- **fabric_remove_workspace_role_assignment** - Remove workspace access
+
+### **🔄 Advanced Operations**
+- **fabric_get_workspace_git_status** - Check Git integration status
+- **fabric_connect_workspace_to_git** - Enable Git integration for workspace
+- **fabric_disconnect_workspace_from_git** - Disable Git integration
+- **fabric_update_workspace_git_connection** - Modify Git repository settings
+
+### **🛠️ Environment & Pipeline Management**
+- **fabric_list_workspace_environments** - List all environments in workspace
+- **fabric_create_workspace_environment** - Create new environments
+- **fabric_delete_workspace_environment** - Remove environments
+- **fabric_list_workspace_data_pipelines** - List data integration pipelines
+- **fabric_create_workspace_data_pipeline** - Create new data pipelines
+
+### **🎯 Real-World Scenarios Enabled**
+
+**🚀 Automated Workspace Provisioning:**
+```
+"Create a new workspace called 'Analytics-Q1-2025' and assign it to our premium capacity"
+```
+
+**📊 Multi-Workspace Analytics:**
+```
+"List all workspaces in our tenant and show their capacity assignments"
+```
+
+**🔒 Access Management:**
+```
+"Add user john.doe@company.com as Admin to the Analytics workspace"
+```
+
+**🏗️ Environment Setup:**
+```
+"Create a development environment in the Analytics workspace with Python and R libraries"
+```
+
+**🔄 Git Integration:**
+```
+"Connect the Analytics workspace to our GitHub repository for version control"
+```
+
+### **🤖 GitHub Copilot Integration**
+
+**Perfect for GitHub Copilot** - The enhanced workspace management works seamlessly with **GitHub Copilot's built-in terminal**, making it ideal for:
+
+- **🔧 Azure CLI Authentication** - Uses your existing `az login` session
+- **💻 Terminal-Based Operations** - Natural workflow within your coding environment  
+- **⚡ Rapid Prototyping** - Quickly create test workspaces and environments
+- **🏗️ Infrastructure as Code** - Manage Fabric resources alongside your codebase
+- **🔄 CI/CD Integration** - Automate workspace provisioning in deployment pipelines
+
+**GitHub Copilot Example Commands:**
+
+```bash
+# Using Azure CLI auth, create a new workspace for our ML project
+# List all workspaces and their Git integration status
+# Set up a complete analytics environment with lakehouse and notebooks
+```
+
+### **🎯 End-to-End Testing with Real Workspaces**
+
+The MCP server now includes comprehensive end-to-end testing that creates real workspaces, assigns them to capacities, and executes actual jobs to validate the complete workflow:
+
+```bash
+# One-command end-to-end test
+npm run test:e2e
+```
+
+**What it tests:**
+- ✅ **Workspace Creation** - Creates real Fabric workspaces
+- ✅ **Capacity Assignment** - Attaches workspaces to your Fabric capacity
+- ✅ **Item Creation** - Creates notebooks, lakehouses, and other items
+- ✅ **Job Execution** - Runs actual Spark jobs and monitors completion
+- ✅ **Resource Cleanup** - Automatically removes all test resources
 
 ## 🚀 **Deployment Options**
 
@@ -513,7 +614,7 @@ pip install -r livy_requirements.txt
 - `comprehensive_livy_test.py` - Full-featured test with error handling
 - `simple_livy_test.py` - Simple test following example patterns
 - `livy_batch_test.py` - Batch job testing capabilities
-- `livy_setup.py` - Quick setup and configuration helper
+- `spark_monitoring_test.py` - Spark application monitoring tests
 
 ## Usage
 
