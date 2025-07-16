@@ -41,7 +41,6 @@ A comprehensive Model Context Protocol (MCP) server that provides analytics capa
 - **☸️ Enterprise Deployment** - Full Kubernetes and Azure deployment support with auto-scaling
 - **🔄 Docker Support** - Containerized deployment with health checks and monitoring
 - **📊 Monitoring & Observability** - Built-in Prometheus metrics and Grafana dashboards
-- **🚀 Azure MCP Server** - Native Azure hosting option (preview)
 - **🎯 48 Total Tools** - Comprehensive coverage of Fabric operations (up from 31 tools)
 
 ## 🏗️ **New Workspace Management Features**
