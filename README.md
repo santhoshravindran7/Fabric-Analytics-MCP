@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/santhoshravindran7-fabric-analytics-mcp-badge.png)](https://mseep.ai/app/santhoshravindran7-fabric-analytics-mcp)
+
 # Microsoft Fabric Analytics MCP Server
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
