@@ -16,7 +16,7 @@ Instead, please report security issues by:
    - Provide detailed information about the vulnerability
 
 2. **Email** (Alternative)
-   - Send details to: [maintainer-email@example.com]
+   - Send details to: [santhosh.ravindran@microsoft.com]
    - Include steps to reproduce the vulnerability
    - Provide any proof-of-concept code if applicable
 
