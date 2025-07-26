@@ -2,7 +2,7 @@
   "mcpServers": {
     "fabric-analytics": {
       "command": "node",
-      "args": ["C:\\Users\\saravi\\OneDrive - Microsoft\\MCP for Microsoft Fabric Analytics\\build\\index.js"],
+      "args": ["<local path of index.js>"],
       "env": {
         "FABRIC_AUTH_METHOD": "azure_cli"
       }
