@@ -3,14 +3,9 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { FabricApiClient, ApiResponse, JobExecutionResult } from './fabric-client.js';
+import { FabricApiClient, ApiResponse } from './fabric-client.js';
 import { SimulationService } from './simulation-service.js';
 import { MicrosoftAuthClient, AuthMethod, AuthResult } from './auth-client.js';
-import { exec } from 'child_process';
-import { promisify } from 'util';
-import http from 'http';
-
-const execAsync = promisify(exec);
 
 // Enhanced Authentication Configuration
 interface AuthConfig {
@@ -219,114 +214,74 @@ const SparkJobSchema = BaseWorkspaceSchema.extend({
   }).optional().describe("Spark cluster configuration")
 });
 
-const SparkJobDefinitionSchema = BaseWorkspaceSchema.extend({
-  sparkJobDefinitionId: z.string().min(1).describe("Spark Job Definition ID"),
-  jobType: z.enum(["sparkjob"]).default("sparkjob").describe("Type of job to create"),
-  executionData: z.object({
-    executableFile: z.string().optional().describe("Path to executable file"),
-    mainClass: z.string().optional().describe("Main class for Spark job"),
-    commandLineArguments: z.string().optional().describe("Command line arguments"),
-    additionalLibraryUris: z.array(z.string()).optional().describe("Additional library URIs"),
-    defaultLakehouseId: z.object({
-      referenceType: z.enum(["ById"]).default("ById"),
-      workspaceId: z.string().describe("Workspace ID"),
-      itemId: z.string().describe("Lakehouse ID")
-    }).optional().describe("Default lakehouse configuration"),
-    environmentId: z.object({
-      referenceType: z.enum(["ById"]).default("ById"),
-      workspaceId: z.string().describe("Workspace ID"),
-      itemId: z.string().describe("Environment ID")
-    }).optional().describe("Environment configuration")
-  }).optional().describe("Execution data for the Spark job")
-});
-
-const SparkJobInstanceSchema = BaseWorkspaceSchema.extend({
-  sparkJobDefinitionId: z.string().min(1).describe("Spark Job Definition ID"),
-  jobType: z.enum(["sparkjob"]).default("sparkjob").describe("Type of job instance")
-});
-
-const SparkJobStatusSchema = BaseWorkspaceSchema.extend({
-  sparkJobDefinitionId: z.string().min(1).describe("Spark Job Definition ID"),
-  jobInstanceId: z.string().min(1).describe("Job Instance ID to check status")
-});
-
 const JobStatusSchema = BaseWorkspaceSchema.extend({
   jobId: z.string().min(1).describe("Job ID to check status")
 });
 
-const LivySessionSchema = BaseWorkspaceSchema.extend({
-  lakehouseId: z.string().min(1).describe("Lakehouse ID for Livy session"),
-  sessionConfig: z.object({
-    kind: z.enum(["spark", "pyspark", "sparkr", "sql"]).optional().describe("Session kind"),
-    driverMemory: z.string().optional().describe("Driver memory (e.g., '4g')"),
-    driverCores: z.number().optional().describe("Number of driver cores"),
-    executorMemory: z.string().optional().describe("Executor memory (e.g., '2g')"),
-    executorCores: z.number().optional().describe("Number of executor cores"),
-    numExecutors: z.number().optional().describe("Number of executors"),
-    name: z.string().optional().describe("Session name"),
-    conf: z.record(z.string()).optional().describe("Spark configuration")
-  }).optional().describe("Session configuration")
+// Notebook Management Schemas
+const CreateNotebookSchema = BaseWorkspaceSchema.extend({
+  displayName: z.string().min(1).max(256).describe("Display name for the notebook"),
+  description: z.string().max(1024).optional().describe("Optional description")
 });
 
-const LivySessionOperationSchema = BaseWorkspaceSchema.extend({
-  lakehouseId: z.string().min(1).describe("Lakehouse ID"),
-  sessionId: z.number().min(0).describe("Livy session ID")
+const NotebookOperationSchema = BaseWorkspaceSchema.extend({
+  notebookId: z.string().min(1).describe("Notebook ID")
 });
 
-const LivyStatementSchema = BaseWorkspaceSchema.extend({
-  lakehouseId: z.string().min(1).describe("Lakehouse ID"),
-  sessionId: z.number().min(0).describe("Livy session ID"),
-  code: z.string().min(1).describe("Code to execute"),
-  kind: z.enum(["spark", "pyspark", "sparkr", "sql"]).optional().describe("Statement kind")
+const UpdateNotebookSchema = BaseWorkspaceSchema.extend({
+  notebookId: z.string().min(1).describe("Notebook ID to update"),
+  displayName: z.string().min(1).max(256).optional().describe("New display name"),
+  description: z.string().max(1024).optional().describe("New description")
 });
 
-const LivyStatementOperationSchema = BaseWorkspaceSchema.extend({
-  lakehouseId: z.string().min(1).describe("Lakehouse ID"),
-  sessionId: z.number().min(0).describe("Livy session ID"),
-  statementId: z.number().min(0).describe("Statement ID")
+const GetNotebookDefinitionSchema = BaseWorkspaceSchema.extend({
+  notebookId: z.string().min(1).describe("Notebook ID"),
+  format: z.enum(["ipynb", "fabricGitSource"]).default("ipynb").describe("Format to return notebook in")
 });
 
-const LivyBatchSchema = BaseWorkspaceSchema.extend({
-  lakehouseId: z.string().min(1).describe("Lakehouse ID"),
-  batchConfig: z.object({
-    file: z.string().describe("Path to the executable file"),
-    className: z.string().optional().describe("Main class name"),
-    args: z.array(z.string()).optional().describe("Command line arguments"),
-    jars: z.array(z.string()).optional().describe("JAR files"),
-    pyFiles: z.array(z.string()).optional().describe("Python files"),
-    files: z.array(z.string()).optional().describe("Other files"),
-    driverMemory: z.string().optional().describe("Driver memory"),
-    driverCores: z.number().optional().describe("Driver cores"),
-    executorMemory: z.string().optional().describe("Executor memory"),
-    executorCores: z.number().optional().describe("Executor cores"),
-    numExecutors: z.number().optional().describe("Number of executors"),
-    name: z.string().optional().describe("Batch job name"),
-    conf: z.record(z.string()).optional().describe("Spark configuration")
-  }).describe("Batch job configuration")
+const NotebookDefinitionPart = z.object({
+  path: z.string().describe("File path within the notebook"),
+  payload: z.string().describe("Base64 encoded content"),
+  payloadType: z.enum(["InlineBase64", "InlineText"]).describe("Type of payload encoding")
 });
 
-const LivyBatchOperationSchema = BaseWorkspaceSchema.extend({
-  lakehouseId: z.string().min(1).describe("Lakehouse ID"),
-  batchId: z.number().min(0).describe("Batch job ID")
+const NotebookDefinitionSchema = z.object({
+  parts: z.array(NotebookDefinitionPart).describe("Notebook definition parts")
+});
+
+const UpdateNotebookDefinitionSchema = BaseWorkspaceSchema.extend({
+  notebookId: z.string().min(1).describe("Notebook ID to update"),
+  definition: NotebookDefinitionSchema.describe("Updated notebook definition")
+});
+
+const NotebookParameterSchema = z.object({
+  value: z.unknown().describe("Parameter value"),
+  type: z.enum(["string", "int", "float", "bool"]).describe("Parameter type")
+});
+
+const NotebookExecutionConfigSchema = z.object({
+  conf: z.record(z.string()).optional().describe("Spark configuration"),
+  environment: z.object({
+    id: z.string().describe("Environment ID"),
+    name: z.string().optional().describe("Environment name")
+  }).optional().describe("Environment to use"),
+  defaultLakehouse: z.object({
+    name: z.string().describe("Lakehouse name"),
+    id: z.string().describe("Lakehouse ID"),
+    workspaceId: z.string().optional().describe("Lakehouse workspace ID")
+  }).optional().describe("Default lakehouse"),
+  useStarterPool: z.boolean().default(false).describe("Use starter pool"),
+  useWorkspacePool: z.string().optional().describe("Workspace pool name")
+});
+
+const RunNotebookSchema = BaseWorkspaceSchema.extend({
+  notebookId: z.string().min(1).describe("Notebook ID to run"),
+  parameters: z.record(NotebookParameterSchema).optional().describe("Notebook parameters"),
+  configuration: NotebookExecutionConfigSchema.optional().describe("Execution configuration")
 });
 
 // Spark Monitoring Schemas
 const SparkMonitoringBaseSchema = BaseWorkspaceSchema.extend({
-  continuationToken: z.string().optional().describe("Continuation token for pagination")
-});
-
-const SparkNotebookMonitoringSchema = BaseWorkspaceSchema.extend({
-  notebookId: z.string().min(1).describe("Notebook ID to monitor"),
-  continuationToken: z.string().optional().describe("Continuation token for pagination")
-});
-
-const SparkJobDefinitionMonitoringSchema = BaseWorkspaceSchema.extend({
-  sparkJobDefinitionId: z.string().min(1).describe("Spark Job Definition ID to monitor"),
-  continuationToken: z.string().optional().describe("Continuation token for pagination")
-});
-
-const SparkLakehouseMonitoringSchema = BaseWorkspaceSchema.extend({
-  lakehouseId: z.string().min(1).describe("Lakehouse ID to monitor"),
   continuationToken: z.string().optional().describe("Continuation token for pagination")
 });
 
@@ -386,42 +341,25 @@ const CreateNotebookFromTemplateSchema = BaseWorkspaceSchema.extend({
   lakehouseName: z.string().optional().describe("Default lakehouse name")
 });
 
-const GetNotebookDefinitionSchema = BaseWorkspaceSchema.extend({
-  notebookId: z.string().min(1).describe("Notebook ID to get definition for"),
-  format: z.enum(["ipynb", "fabricGitSource"]).default("ipynb").describe("Format to return notebook in")
-});
-
-const RunNotebookSchema = BaseWorkspaceSchema.extend({
-  notebookId: z.string().min(1).describe("Notebook ID to run"),
-  parameters: z.record(z.object({
-    value: z.any().describe("Parameter value"),
-    type: z.enum(["string", "int", "float", "bool"]).default("string").describe("Parameter type")
-  })).optional().describe("Notebook parameters"),
-  configuration: z.object({
-    conf: z.record(z.string()).optional().describe("Spark configuration"),
-    environment: z.object({
-      id: z.string().describe("Environment ID"),
-      name: z.string().optional().describe("Environment name")
-    }).optional().describe("Environment to use"),
-    defaultLakehouse: z.object({
-      name: z.string().describe("Lakehouse name"),
-      id: z.string().describe("Lakehouse ID"),
-      workspaceId: z.string().optional().describe("Lakehouse workspace ID")
-    }).optional().describe("Default lakehouse"),
-    useStarterPool: z.boolean().default(false).describe("Use starter pool"),
-    useWorkspacePool: z.string().optional().describe("Workspace pool name")
-  }).optional().describe("Execution configuration")
-});
-
-const UpdateNotebookDefinitionSchema = BaseWorkspaceSchema.extend({
-  notebookId: z.string().min(1).describe("Notebook ID to update"),
-  notebookDefinition: NotebookDefinition.describe("Updated notebook definition")
-});
+interface NotebookTemplate {
+  nbformat: number;
+  nbformat_minor: number;
+  cells: Array<{
+    cell_type: string;
+    source: string[];
+    execution_count?: number | null;
+    outputs?: any[];
+    metadata: Record<string, any>;
+  }>;
+  metadata: {
+    language_info?: { name: string };
+  };
+}
 
 /**
  * Generate predefined notebook templates
  */
-function getNotebookTemplate(template: string): any {
+function getNotebookTemplate(template: string): NotebookTemplate {
   const templates = {
     blank: {
       nbformat: 4,
@@ -443,60 +381,78 @@ function getNotebookTemplate(template: string): any {
       metadata: {
         language_info: { name: "python" }
       }
+    },
+    sales_analysis: {
+      nbformat: 4,
+      nbformat_minor: 5,
+      cells: [
+        {
+          cell_type: "markdown",
+          source: ["# Sales Analysis Notebook\n\nThis notebook provides comprehensive sales data analysis capabilities."],
+          metadata: {}
+        },
+        {
+          cell_type: "code",
+          source: [
+            "# Import required libraries\n",
+            "import pandas as pd\n",
+            "import numpy as np\n",
+            "import matplotlib.pyplot as plt\n",
+            "import seaborn as sns\n",
+            "from datetime import datetime, timedelta"
+          ],
+          execution_count: null,
+          outputs: [],
+          metadata: {}
+        },
+        {
+          cell_type: "code",
+          source: [
+            "# Load sales data\n",
+            "# Replace with your actual data source\n",
+            "df_sales = spark.sql(\"SELECT * FROM lakehouse.sales_data LIMIT 1000\")\n",
+            "df_sales.display()"
+          ],
+          execution_count: null,
+          outputs: [],
+          metadata: {}
+        }
+      ],
+      metadata: {
+        language_info: { name: "python" }
+      }
+    },
+    data_exploration: {
+      nbformat: 4,
+      nbformat_minor: 5,
+      cells: [
+        {
+          cell_type: "markdown",
+          source: ["# Data Exploration Notebook\n\nStructured approach to data exploration and analysis."],
+          metadata: {}
+        },
+        {
+          cell_type: "code",
+          source: [
+            "# Data exploration imports\n",
+            "import pandas as pd\n",
+            "import numpy as np\n",
+            "import matplotlib.pyplot as plt\n",
+            "import seaborn as sns\n",
+            "from pyspark.sql import functions as F"
+          ],
+          execution_count: null,
+          outputs: [],
+          metadata: {}
+        }
+      ],
+      metadata: {
+        language_info: { name: "python" }
+      }
     }
   };
   
   return templates[template as keyof typeof templates] || templates.blank;
-}
-
-/**
- * Get current authentication status for health checks
- */
-function getAuthenticationStatus() {
-  const hasFabricToken = !!process.env.FABRIC_TOKEN;
-  const hasValidCache = cachedAuthResult && cachedAuthResult.expiresOn > new Date();
-  
-  return {
-    method: authConfig.method,
-    configured: !!authConfig.clientId || hasFabricToken,
-    hasCachedToken: hasValidCache,
-    hasFabricToken: hasFabricToken,
-    ready: authConfig.method === AuthMethod.BEARER_TOKEN || hasFabricToken || hasValidCache,
-    recommendation: authConfig.method !== AuthMethod.BEARER_TOKEN && !hasFabricToken ? 
-      "For Claude Desktop, use FABRIC_AUTH_METHOD=bearer_token with FABRIC_TOKEN" : 
-      "Authentication properly configured"
-  };
-}
-
-/**
- * Validate bearer token format and basic structure
- */
-function validateBearerToken(token: string): { isValid: boolean; error?: string; expiresAt?: Date } {
-  if (!token || token.length < 10) {
-    return { isValid: false, error: "Token too short or empty" };
-  }
-
-  // Check if it's a JWT token
-  if (token.includes('.')) {
-    try {
-      const parts = token.split('.');
-      if (parts.length === 3) {
-        const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
-        if (payload.exp) {
-          const expiresAt = new Date(payload.exp * 1000);
-          if (expiresAt < new Date()) {
-            return { isValid: false, error: "Token has expired", expiresAt };
-          }
-          return { isValid: true, expiresAt };
-        }
-      }
-    } catch (e) {
-      // If parsing fails, treat as opaque token
-    }
-  }
-
-  // For non-JWT tokens, assume valid if not obviously invalid
-  return { isValid: true };
 }
 
 async function executeApiCall<T>(
@@ -603,7 +559,500 @@ server.tool(
   }
 );
 
-// Additional tool implementations would continue here...
+server.tool(
+  "update-fabric-item",
+  "Update an existing item in Microsoft Fabric workspace",
+  UpdateItemSchema.shape,
+  async ({ bearerToken, workspaceId, itemId, displayName, description }) => {
+    const updates: any = {};
+    if (displayName) updates.displayName = displayName;
+    if (description !== undefined) updates.description = description;
+
+    if (Object.keys(updates).length === 0) {
+      return {
+        content: [{ type: "text", text: "No updates specified. Provide displayName or description to update." }]
+      };
+    }
+
+    const result = await executeApiCall(
+      bearerToken,
+      workspaceId,
+      "update-item",
+      (client) => client.updateItem(itemId, updates),
+      { itemId, updates }
+    );
+
+    if (result.status === 'error') {
+      return {
+        content: [{ type: "text", text: `Error updating item: ${result.error}` }]
+      };
+    }
+
+    return {
+      content: [{
+        type: "text",
+        text: `Successfully updated item ${itemId}\nName: ${result.data?.displayName}\nDescription: ${result.data?.description || "No description"}`
+      }]
+    };
+  }
+);
+
+server.tool(
+  "delete-fabric-item",
+  "Delete an item from Microsoft Fabric workspace",
+  ItemOperationSchema.shape,
+  async ({ bearerToken, workspaceId, itemId }) => {
+    const result = await executeApiCall(
+      bearerToken,
+      workspaceId,
+      "delete-item",
+      (client) => client.deleteItem(itemId),
+      { itemId }
+    );
+
+    if (result.status === 'error') {
+      return {
+        content: [{ type: "text", text: `Error deleting item: ${result.error}` }]
+      };
+    }
+
+    return {
+      content: [{ type: "text", text: `Successfully deleted item ${itemId} from workspace ${workspaceId}` }]
+    };
+  }
+);
+
+server.tool(
+  "get-fabric-item",
+  "Get detailed information about a specific Microsoft Fabric item",
+  ItemOperationSchema.shape,
+  async ({ bearerToken, workspaceId, itemId }) => {
+    const result = await executeApiCall(
+      bearerToken,
+      workspaceId,
+      "get-item",
+      (client) => client.getItem(itemId),
+      { itemId }
+    );
+
+    if (result.status === 'error') {
+      return {
+        content: [{ type: "text", text: `Error retrieving item: ${result.error}` }]
+      };
+    }
+
+    const item = result.data;
+    return {
+      content: [{
+        type: "text",
+        text: `Item Details:\nName: ${item.displayName}\nType: ${item.type}\nID: ${item.id}\nDescription: ${item.description || "No description"}\nCreated: ${item.createdDate}\nModified: ${item.modifiedDate}`
+      }]
+    };
+  }
+);
+
+server.tool(
+  "execute-fabric-notebook",
+  "Execute a notebook in Microsoft Fabric workspace",
+  NotebookExecutionSchema.shape,
+  async ({ bearerToken, workspaceId, notebookId, parameters, timeout }) => {
+    const result = await executeApiCall(
+      bearerToken,
+      workspaceId,
+      "execute-notebook",
+      (client) => client.executeNotebook(notebookId, parameters),
+      { notebookId, parameters, timeout }
+    );
+
+    if (result.status === 'error') {
+      return {
+        content: [{ type: "text", text: `Error executing notebook: ${result.error}` }]
+      };
+    }
+
+    return {
+      content: [{
+        type: "text",
+        text: `Notebook execution started:\nJob ID: ${result.data?.id}\nStatus: ${result.data?.status}\nNotebook ID: ${notebookId}\nStarted: ${result.data?.createdDateTime}${parameters ? `\nParameters: ${JSON.stringify(parameters, null, 2)}` : ""}`
+      }]
+    };
+  }
+);
+
+server.tool(
+  "submit-spark-job",
+  "Submit a Spark job to run on a Lakehouse",
+  SparkJobSchema.shape,
+  async ({ bearerToken, workspaceId, lakehouseId, code, language, clusterConfig }) => {
+    const result = await executeApiCall(
+      bearerToken,
+      workspaceId,
+      "spark-job",
+      (client) => client.submitSparkJob(lakehouseId, code, language, clusterConfig),
+      { lakehouseId, code, language, config: clusterConfig }
+    );
+
+    if (result.status === 'error') {
+      return {
+        content: [{ type: "text", text: `Error submitting Spark job: ${result.error}` }]
+      };
+    }
+
+    return {
+      content: [{
+        type: "text",
+        text: `Spark job submitted successfully:\nJob ID: ${result.data?.id}\nStatus: ${result.data?.status}\nLanguage: ${language}\nLakehouse ID: ${lakehouseId}\nSubmitted: ${result.data?.createdDateTime}`
+      }]
+    };
+  }
+);
+
+server.tool(
+  "get-job-status",
+  "Get the status of a running job",
+  JobStatusSchema.shape,
+  async ({ bearerToken, workspaceId, jobId }) => {
+    const result = await executeApiCall(
+      bearerToken,
+      workspaceId,
+      "job-status",
+      (client) => client.getJobStatus(jobId),
+      { jobId }
+    );
+
+    if (result.status === 'error') {
+      return {
+        content: [{ type: "text", text: `Error getting job status: ${result.error}` }]
+      };
+    }
+
+    const job = result.data;
+    if (!job) {
+      return {
+        content: [{ type: "text", text: "Error: No job data received" }]
+      };
+    }
+
+    let statusText = `Job Status:\nJob ID: ${job.id}\nStatus: ${job.status}\nCreated: ${job.createdDateTime}`;
+    
+    if (job.completedDateTime) {
+      statusText += `\nCompleted: ${job.completedDateTime}`;
+    }
+    
+    if (job.error) {
+      statusText += `\nError: ${job.error}`;
+    }
+
+    return {
+      content: [{ type: "text", text: statusText }]
+    };
+  }
+);
+
+server.tool(
+  "create-fabric-notebook",
+  "Create a new notebook from template in Microsoft Fabric workspace",
+  CreateNotebookFromTemplateSchema.shape,
+  async ({ bearerToken, workspaceId, displayName, template, customNotebook, environmentId, lakehouseId, lakehouseName }) => {
+    // Since createNotebook is not available in FabricApiClient, use create-item with notebook type
+    const result = await executeApiCall(
+      bearerToken,
+      workspaceId,
+      "create-item",
+      (client) => client.createItem("Notebook", displayName, `Created from ${template} template`),
+      { displayName, template, itemType: "Notebook" }
+    );
+
+    if (result.status === 'error') {
+      return {
+        content: [{ type: "text", text: `Error creating notebook: ${result.error}` }]
+      };
+    }
+
+    return {
+      content: [{
+        type: "text",
+        text: `Successfully created notebook: "${displayName}"\nID: ${result.data?.id || "Generated"}\nTemplate: ${template}\nType: Notebook${environmentId ? `\nEnvironment: ${environmentId}` : ""}${lakehouseId ? `\nDefault Lakehouse: ${lakehouseId}` : ""}`
+      }]
+    };
+  }
+);
+
+server.tool(
+  "get-workspace-spark-applications",
+  "Get all Spark applications in a workspace for monitoring",
+  SparkMonitoringBaseSchema.shape,
+  async ({ bearerToken, workspaceId, continuationToken }) => {
+    const result = await executeApiCall(
+      bearerToken,
+      workspaceId,
+      "workspace-spark-applications",
+      (client) => client.listItems("All"), // Use available method as fallback
+      { continuationToken, operation: "spark-monitoring" }
+    );
+
+    if (result.status === 'error') {
+      return {
+        content: [{ type: "text", text: `Error getting Spark applications: ${result.error}` }]
+      };
+    }
+
+    const items = result.data?.value || [];
+    const sparkItems = items.filter((item: any) => 
+      item.type === "Notebook" || item.type === "Lakehouse" || item.displayName.toLowerCase().includes("spark")
+    );
+
+    if (sparkItems.length === 0) {
+      return {
+        content: [{ type: "text", text: `No Spark-related items found in workspace ${workspaceId}. This includes Notebooks and Lakehouses that can run Spark jobs.` }]
+      };
+    }
+
+    const itemsList = sparkItems.slice(0, 10).map((item: any, index: number) => 
+      `${index + 1}. ${item.displayName} (${item.type})\n   ID: ${item.id}\n   Modified: ${item.modifiedDate}`
+    ).join("\n\n");
+
+    return {
+      content: [{
+        type: "text",
+        text: `Spark-related Items in Workspace:\n\nTotal: ${sparkItems.length}\n\nItems:\n${itemsList}${sparkItems.length > 10 ? "\n\n... and " + (sparkItems.length - 10) + " more" : ""}`
+      }]
+    };
+  }
+);
+
+// ==================== NOTEBOOK MANAGEMENT TOOLS ====================
+
+server.tool(
+  "list-fabric-notebooks",
+  "List all notebooks in a Microsoft Fabric workspace",
+  BaseWorkspaceSchema.shape,
+  async ({ bearerToken, workspaceId }) => {
+    const result = await executeApiCall(
+      bearerToken,
+      workspaceId,
+      "list-notebooks",
+      (client) => client.listNotebooks(),
+      {}
+    );
+
+    if (result.status === 'error') {
+      return {
+        content: [{ type: "text", text: `Error listing notebooks: ${result.error}` }]
+      };
+    }
+
+    const notebooks = result.data?.value || [];
+    if (notebooks.length === 0) {
+      return {
+        content: [{ type: "text", text: `No notebooks found in workspace ${workspaceId}` }]
+      };
+    }
+
+    const notebooksList = notebooks.map((notebook: any, index: number) => 
+      `${index + 1}. ${notebook.displayName}\n   ID: ${notebook.id}\n   Description: ${notebook.description || "No description"}\n   Modified: ${notebook.modifiedDate || "Unknown"}`
+    ).join("\n\n");
+
+    return {
+      content: [{ type: "text", text: `Notebooks in workspace:\n\n${notebooksList}` }]
+    };
+  }
+);
+
+server.tool(
+  "get-fabric-notebook",
+  "Get details of a specific notebook in Microsoft Fabric workspace",
+  NotebookOperationSchema.shape,
+  async ({ bearerToken, workspaceId, notebookId }) => {
+    const result = await executeApiCall(
+      bearerToken,
+      workspaceId,
+      "get-notebook",
+      (client) => client.getNotebook(notebookId),
+      { notebookId }
+    );
+
+    if (result.status === 'error') {
+      return {
+        content: [{ type: "text", text: `Error getting notebook: ${result.error}` }]
+      };
+    }
+
+    const notebook = result.data;
+    return {
+      content: [{
+        type: "text",
+        text: `Notebook Details:\n\nName: ${notebook?.displayName}\nID: ${notebook?.id}\nType: ${notebook?.type}\nDescription: ${notebook?.description || "No description"}\nWorkspace: ${notebook?.workspaceId}`
+      }]
+    };
+  }
+);
+
+server.tool(
+  "update-fabric-notebook",
+  "Update an existing notebook in Microsoft Fabric workspace",
+  UpdateNotebookSchema.shape,
+  async ({ bearerToken, workspaceId, notebookId, displayName, description }) => {
+    const updates: Record<string, string> = {};
+    if (displayName) updates.displayName = displayName;
+    if (description) updates.description = description;
+
+    if (Object.keys(updates).length === 0) {
+      return {
+        content: [{ type: "text", text: "No updates provided. Please specify displayName or description to update." }]
+      };
+    }
+
+    const result = await executeApiCall(
+      bearerToken,
+      workspaceId,
+      "update-notebook",
+      (client) => client.updateNotebook(notebookId, updates),
+      { notebookId, updates }
+    );
+
+    if (result.status === 'error') {
+      return {
+        content: [{ type: "text", text: `Error updating notebook: ${result.error}` }]
+      };
+    }
+
+    return {
+      content: [{
+        type: "text",
+        text: `Successfully updated notebook: "${result.data?.displayName}"\nID: ${result.data?.id}\nDescription: ${result.data?.description || "No description"}`
+      }]
+    };
+  }
+);
+
+server.tool(
+  "delete-fabric-notebook",
+  "Delete a notebook from Microsoft Fabric workspace",
+  NotebookOperationSchema.shape,
+  async ({ bearerToken, workspaceId, notebookId }) => {
+    const result = await executeApiCall(
+      bearerToken,
+      workspaceId,
+      "delete-notebook",
+      (client) => client.deleteNotebook(notebookId),
+      { notebookId }
+    );
+
+    if (result.status === 'error') {
+      return {
+        content: [{ type: "text", text: `Error deleting notebook: ${result.error}` }]
+      };
+    }
+
+    return {
+      content: [{
+        type: "text",
+        text: `Successfully deleted notebook with ID: ${notebookId}`
+      }]
+    };
+  }
+);
+
+server.tool(
+  "get-fabric-notebook-definition",
+  "Get the definition/content of a notebook in Microsoft Fabric workspace",
+  GetNotebookDefinitionSchema.shape,
+  async ({ bearerToken, workspaceId, notebookId, format }) => {
+    const result = await executeApiCall(
+      bearerToken,
+      workspaceId,
+      "get-notebook-definition",
+      (client) => client.getNotebookDefinition(notebookId, format),
+      { notebookId, format }
+    );
+
+    if (result.status === 'error') {
+      return {
+        content: [{ type: "text", text: `Error getting notebook definition: ${result.error}` }]
+      };
+    }
+
+    const definition = result.data?.definition;
+    if (!definition || !definition.parts) {
+      return {
+        content: [{ type: "text", text: "No notebook definition found or invalid format." }]
+      };
+    }
+
+    const parts = definition.parts.map((part: any, index: number) => 
+      `${index + 1}. ${part.path} (${part.payloadType})`
+    ).join("\n");
+
+    return {
+      content: [{
+        type: "text",
+        text: `Notebook Definition (${format} format):\n\nParts:\n${parts}\n\nNote: Content is base64 encoded. Use appropriate tools to decode and view the actual notebook content.`
+      }]
+    };
+  }
+);
+
+server.tool(
+  "run-fabric-notebook",
+  "Execute/run a notebook in Microsoft Fabric workspace",
+  RunNotebookSchema.shape,
+  async ({ bearerToken, workspaceId, notebookId, parameters, configuration }) => {
+    const result = await executeApiCall(
+      bearerToken,
+      workspaceId,
+      "run-notebook",
+      (client) => client.runNotebook(notebookId, parameters as Record<string, import('./fabric-client.js').NotebookParameter> | undefined, configuration),
+      { notebookId, parameters, configuration }
+    );
+
+    if (result.status === 'error') {
+      return {
+        content: [{ type: "text", text: `Error running notebook: ${result.error}` }]
+      };
+    }
+
+    return {
+      content: [{
+        type: "text",
+        text: `Successfully started notebook execution:\nNotebook ID: ${notebookId}\nJob ID: ${result.data?.id || 'Unknown'}\nStatus: ${result.data?.status || 'Started'}\nCreated: ${result.data?.createdDateTime || 'Now'}`
+      }]
+    };
+  }
+);
+
+// ==================== SPARK MONITORING TOOLS ====================
+
+server.tool(
+  "get-spark-monitoring-dashboard", 
+  "Get comprehensive Spark monitoring dashboard for workspace",
+  SparkDashboardSchema.shape,
+  async ({ bearerToken, workspaceId, includeCompleted, maxResults }) => {
+    const result = await executeApiCall(
+      bearerToken,
+      workspaceId,
+      "get-spark-monitoring-dashboard",
+      (client) => client.getSparkMonitoringDashboard(includeCompleted, maxResults),
+      { includeCompleted, maxResults }
+    );
+
+    if (result.status === 'error') {
+      return {
+        content: [{ type: "text", text: `Error getting monitoring dashboard: ${result.error}` }]
+      };
+    }
+
+    const dashboard = result.data;
+    const summary = dashboard?.summary;
+    
+    return {
+      content: [{
+        type: "text",
+        text: `Spark Monitoring Dashboard:\n\n📊 Summary:\n• Total Applications: ${summary?.total || 0}\n• Running: ${summary?.running || 0}\n• Completed: ${summary?.completed || 0}\n• Failed: ${summary?.failed || 0}\n• Pending: ${summary?.pending || 0}\n\n📈 By Item Type:\n${Object.entries(dashboard?.byItemType || {}).map(([type, count]) => `• ${type}: ${count}`).join('\n')}\n\n🎯 By State:\n${Object.entries(dashboard?.byState || {}).map(([state, count]) => `• ${state}: ${count}`).join('\n')}\n\n🕒 Recent Activity: ${dashboard?.recentActivity?.length || 0} recent applications`
+      }]
+    };
+  }
+);
 
 async function main() {
   const transport = new StdioServerTransport();

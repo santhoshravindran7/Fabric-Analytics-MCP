@@ -78,7 +78,34 @@ export interface LivyStatementResult {
   completed?: string;
 }
 
-// Spark Monitoring interfaces
+// Notebook-specific interfaces
+export interface NotebookDefinition {
+  parts: Array<{
+    path: string;
+    payload: string;
+    payloadType: 'InlineBase64' | 'InlineText';
+  }>;
+}
+
+export interface NotebookExecutionConfig {
+  conf?: Record<string, string>;
+  environment?: {
+    id: string;
+    name?: string;
+  };
+  defaultLakehouse?: {
+    name: string;
+    id: string;
+    workspaceId?: string;
+  };
+  useStarterPool?: boolean;
+  useWorkspacePool?: string;
+}
+
+export interface NotebookParameter {
+  value: unknown;
+  type: 'string' | 'int' | 'float' | 'bool';
+}
 export interface SparkApplicationInfo {
   sparkApplicationId: string;
   state: string;
@@ -610,5 +637,106 @@ export class FabricApiClient {
       status: 'success',
       data: dashboard
     };
+  }
+
+  // ==================== NOTEBOOK MANAGEMENT METHODS ====================
+
+  /**
+   * List all notebooks in the workspace.
+   * @returns Promise resolving to list of notebooks
+   */
+  async listNotebooks(): Promise<ApiResponse> {
+    return this.makeRequest("notebooks");
+  }
+
+  /**
+   * Create a new notebook.
+   * @param displayName - Display name for the notebook
+   * @param description - Optional description
+   * @returns Promise resolving to created notebook
+   */
+  async createNotebook(displayName: string, description?: string): Promise<ApiResponse> {
+    const body = {
+      displayName,
+      ...(description && { description })
+    };
+    return this.makeRequest("notebooks", { method: "POST", body });
+  }
+
+  /**
+   * Get details of a specific notebook.
+   * @param notebookId - ID of the notebook to retrieve
+   * @returns Promise resolving to notebook details
+   */
+  async getNotebook(notebookId: string): Promise<ApiResponse> {
+    return this.makeRequest(`notebooks/${notebookId}`);
+  }
+
+  /**
+   * Update an existing notebook.
+   * @param notebookId - ID of the notebook to update
+   * @param updates - Updates to apply (displayName and/or description)
+   * @returns Promise resolving to updated notebook
+   */
+  async updateNotebook(notebookId: string, updates: { displayName?: string; description?: string }): Promise<ApiResponse> {
+    return this.makeRequest(`notebooks/${notebookId}`, { method: "PATCH", body: updates });
+  }
+
+  /**
+   * Delete a notebook from the workspace.
+   * @param notebookId - ID of the notebook to delete
+   * @returns Promise resolving to deletion confirmation
+   */
+  async deleteNotebook(notebookId: string): Promise<ApiResponse> {
+    return this.makeRequest(`notebooks/${notebookId}`, { method: "DELETE" });
+  }
+
+  /**
+   * Get notebook definition/content.
+   * @param notebookId - ID of the notebook
+   * @param format - Format to return ('ipynb' or 'fabricGitSource')
+   * @returns Promise resolving to notebook definition
+   */
+  async getNotebookDefinition(notebookId: string, format: 'ipynb' | 'fabricGitSource' = 'ipynb'): Promise<ApiResponse> {
+    const queryParams = format !== 'fabricGitSource' ? { format } : {};
+    return this.makeRequest(`notebooks/${notebookId}/getDefinition`, { 
+      method: "POST",
+      queryParams 
+    });
+  }
+
+  /**
+   * Update notebook definition/content.
+   * @param notebookId - ID of the notebook
+   * @param definition - Notebook definition object
+   * @returns Promise resolving to update result
+   */
+  async updateNotebookDefinition(notebookId: string, definition: NotebookDefinition): Promise<ApiResponse> {
+    return this.makeRequest(`notebooks/${notebookId}/updateDefinition`, {
+      method: "POST",
+      body: { definition }
+    });
+  }
+
+  /**
+   * Run/execute a notebook.
+   * @param notebookId - ID of the notebook to run
+   * @param parameters - Optional parameters to pass to the notebook
+   * @param configuration - Optional execution configuration
+   * @returns Promise resolving to execution result
+   */
+  async runNotebook(
+    notebookId: string, 
+    parameters?: Record<string, NotebookParameter>, 
+    configuration?: NotebookExecutionConfig
+  ): Promise<ApiResponse> {
+    const body: Record<string, unknown> = {};
+    if (parameters) {
+      body.parameters = parameters;
+    }
+    if (configuration) {
+      body.configuration = configuration;
+    }
+    return this.makeRequest(`notebooks/${notebookId}/jobs/instances`, { method: "POST", body });
   }
 }
