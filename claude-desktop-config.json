@@ -2,9 +2,10 @@
   "mcpServers": {
     "fabric-analytics": {
       "command": "node",
-      "args": ["<local path of index.js>"],
+      "args": ["C:\\Users\\saravi\\Fabric-Analytics-MCP\\build\\index.js"],
       "env": {
-        "FABRIC_AUTH_METHOD": "azure_cli"
+        "FABRIC_AUTH_METHOD": "azure_cli",
+        "FABRIC_DEFAULT_WORKSPACE_ID": ""
       }
     }
   }
