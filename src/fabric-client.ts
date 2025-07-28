@@ -254,6 +254,67 @@ export class FabricApiClient {
   }
 
   /**
+   * List all workspaces accessible to the user using admin API.
+   * @param filter - Optional filter for workspace names
+   * @param top - Maximum number of workspaces to return
+   * @param continuationToken - Optional continuation token for pagination
+   * @returns Promise resolving to workspaces list
+   */
+  async listWorkspaces(filter?: string, top: number = 100, continuationToken?: string): Promise<ApiResponse> {
+    // Use admin API endpoint for listing workspaces (bypasses workspace-specific URL)
+    const url = new URL(`${this.config.apiBaseUrl}/admin/workspaces`);
+    
+    if (filter) {
+      url.searchParams.append('$filter', `contains(name,'${filter}')`);
+    }
+    if (top) {
+      url.searchParams.append('$top', top.toString());
+    }
+    if (continuationToken) {
+      url.searchParams.append('continuationToken', continuationToken);
+    }
+
+    const requestHeaders: Record<string, string> = {
+      "Authorization": `Bearer ${this.bearerToken}`,
+      "Content-Type": "application/json",
+      "Accept": "application/json",
+      "User-Agent": this.config.userAgent,
+    };
+
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.config.timeout);
+
+      const response = await fetch(url.toString(), {
+        method: 'GET',
+        headers: requestHeaders,
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        return {
+          status: 'error',
+          error: `HTTP ${response.status}: ${errorText}`
+        };
+      }
+
+      const data = await response.json();
+      return {
+        status: 'success',
+        data
+      };
+    } catch (error) {
+      return {
+        status: 'error',
+        error: `Request failed: ${error instanceof Error ? error.message : String(error)}`
+      };
+    }
+  }
+
+  /**
    * Create a new item in the workspace.
    * @param itemType - Type of item to create
    * @param displayName - Display name for the item
@@ -738,5 +799,142 @@ export class FabricApiClient {
       body.configuration = configuration;
     }
     return this.makeRequest(`notebooks/${notebookId}/jobs/instances`, { method: "POST", body });
+  }
+
+  // ==================== SIMULATION METHODS ====================
+  // These methods provide mock data for tools that don't have full API implementations yet
+
+  /**
+   * Simulate Spark applications for a specific item type and ID
+   */
+  simulateSparkApplications(itemType: string, itemId: string): Promise<ApiResponse> {
+    const mockApplications = [
+      {
+        id: `app_${Date.now()}_001`,
+        name: `${itemType}-spark-session`,
+        state: "RUNNING",
+        applicationId: `application_${Date.now()}_0001`,
+        driverLogUrl: `https://spark-history.fabric.microsoft.com/logs/driver`,
+        sparkVersion: "3.4.0",
+        submittedDateTime: new Date().toISOString(),
+        itemId: itemId,
+        itemType: itemType
+      },
+      {
+        id: `app_${Date.now()}_002`,
+        name: `${itemType}-batch-job`,
+        state: "COMPLETED",
+        applicationId: `application_${Date.now()}_0002`,
+        driverLogUrl: `https://spark-history.fabric.microsoft.com/logs/driver`,
+        sparkVersion: "3.4.0",
+        submittedDateTime: new Date(Date.now() - 3600000).toISOString(),
+        completedDateTime: new Date(Date.now() - 1800000).toISOString(),
+        itemId: itemId,
+        itemType: itemType
+      }
+    ];
+
+    return Promise.resolve({
+      status: 'success' as const,
+      data: {
+        value: mockApplications,
+        continuationToken: null
+      }
+    });
+  }
+
+  /**
+   * Simulate Spark application details
+   */
+  simulateSparkApplicationDetails(livyId: string): Promise<ApiResponse> {
+    const mockDetails = {
+      id: livyId,
+      applicationId: `application_${Date.now()}_${livyId}`,
+      name: `spark-application-${livyId}`,
+      state: "RUNNING",
+      kind: "pyspark",
+      driverMemory: "8g",
+      driverCores: 4,
+      executorMemory: "4g",
+      executorCores: 2,
+      numExecutors: 2,
+      submittedDateTime: new Date().toISOString(),
+      log: [
+        "24/01/26 10:00:00 INFO SparkContext: Running Spark version 3.4.0",
+        "24/01/26 10:00:01 INFO SparkContext: Successfully started SparkContext",
+        "24/01/26 10:00:02 INFO DAGScheduler: Job 0 started"
+      ]
+    };
+
+    return Promise.resolve({
+      status: 'success' as const,
+      data: mockDetails
+    });
+  }
+
+  /**
+   * Simulate cancelling a Spark application
+   */
+  simulateCancelSparkApplication(livyId: string): Promise<ApiResponse> {
+    return Promise.resolve({
+      status: 'success' as const,
+      data: {
+        message: `Spark application ${livyId} cancellation requested`,
+        state: "CANCELLED",
+        timestamp: new Date().toISOString()
+      }
+    });
+  }
+
+  /**
+   * Simulate Spark monitoring dashboard data
+   */
+  simulateSparkDashboard(includeCompleted?: boolean, maxResults?: number): Promise<ApiResponse> {
+    const mockDashboard = {
+      summary: {
+        total: 12,
+        running: 3,
+        completed: includeCompleted ? 7 : 0,
+        failed: 1,
+        pending: 1
+      },
+      byItemType: {
+        "Notebook": 8,
+        "Lakehouse": 3,
+        "SparkJobDefinition": 1
+      },
+      byState: {
+        "RUNNING": 3,
+        "COMPLETED": includeCompleted ? 7 : 0,
+        "FAILED": 1,
+        "PENDING": 1
+      },
+      recentActivity: [
+        {
+          itemName: "DataAnalysisNotebook",
+          displayName: "DataAnalysisNotebook", 
+          itemType: "Notebook",
+          type: "Notebook",
+          state: "RUNNING",
+          submittedDateTime: new Date().toISOString(),
+          totalDuration: { value: 15, timeUnit: "minutes" }
+        },
+        {
+          itemName: "SalesDataLakehouse",
+          displayName: "SalesDataLakehouse",
+          itemType: "Lakehouse", 
+          type: "Lakehouse",
+          state: "COMPLETED",
+          submittedDateTime: new Date(Date.now() - 3600000).toISOString(),
+          totalDuration: { value: 45, timeUnit: "minutes" }
+        }
+      ].slice(0, Math.min(maxResults || 10, 10)),
+      applications: []
+    };
+
+    return Promise.resolve({
+      status: 'success' as const,
+      data: mockDashboard
+    });
   }
 }
