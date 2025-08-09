@@ -459,6 +459,21 @@ const LivyExecutionHistorySchema = BaseWorkspaceSchema.extend({
   analysisType: z.enum(["performance_trends", "error_patterns", "resource_usage", "comprehensive"]).default("comprehensive").describe("Type of historical analysis")
 });
 
+// Workspace Management Schemas
+const ListWorkspacesSchema = z.object({
+  bearerToken: z.string().optional().describe("Optional bearer token if not using configured authentication"),
+  type: z.string().optional().describe("Optional workspace type filter"),
+  capacityId: z.string().optional().describe("Optional capacity ID filter"),
+  name: z.string().optional().describe("Optional name filter"),
+  state: z.string().optional().describe("Optional state filter (Active, Deleted, etc.)"),
+  continuationToken: z.string().optional().describe("Optional continuation token for pagination")
+});
+
+const FindWorkspaceSchema = z.object({
+  bearerToken: z.string().optional().describe("Optional bearer token if not using configured authentication"),
+  searchName: z.string().min(1).describe("Workspace name to search for (partial match supported)")
+});
+
 // Notebook Management Schemas
 const NotebookCell = z.object({
   cell_type: z.enum(["code", "markdown"]).describe("Type of notebook cell"),
@@ -2625,18 +2640,15 @@ ${!status.tokenValid && status.authMethod !== 'bearer' ? `
 server.tool(
   "fabric_list_workspaces",
   "List all workspaces accessible to the user",
-  {
-    filter: z.string().optional().describe("Optional filter for workspace names"),
-    top: z.number().min(1).max(1000).default(100).describe("Maximum number of workspaces to return"),
-    bearerToken: z.string().optional().describe("Optional bearer token if not using configured authentication")
-  },
-  async ({ filter, top = 100, bearerToken }) => {
+  ListWorkspacesSchema.shape,
+  async ({ bearerToken, type, capacityId, name, state, continuationToken }) => {
     const result = await executeApiCall(
       bearerToken,
       authConfig.defaultWorkspaceId || "global",
       "list-workspaces", 
-      (client) => client.listWorkspaces(filter, top),
-      { filter, top }
+      (client) => client.listWorkspaces(type, capacityId, name, state, continuationToken) || 
+                  client.simulateWorkspaces(type, capacityId, name, state),
+      { type, capacityId, name, state, continuationToken }
     );
 
     if (result.status === 'error') {
@@ -2648,11 +2660,11 @@ server.tool(
     const workspaces = result.data?.workspaces || [];
     if (workspaces.length === 0) {
       return {
-        content: [{ type: "text", text: "No workspaces found" }]
+        content: [{ type: "text", text: "No workspaces found matching the specified criteria" }]
       };
     }
 
-    const workspacesList = workspaces.map((workspace: any, index: number) => 
+    const workspacesList = workspaces.map((workspace: { id: string; name: string; type: string; state: string; capacityId?: string }, index: number) => 
       `${index + 1}. ${workspace.name} (${workspace.type})\n   ID: ${workspace.id}\n   State: ${workspace.state}\n   Capacity ID: ${workspace.capacityId || "No capacity"}`
     ).join("\n\n");
 
@@ -2660,6 +2672,63 @@ server.tool(
       content: [{
         type: "text",
         text: `Workspaces (${workspaces.length} found):\n\n${workspacesList}${result.data?.continuationToken ? `\n\nMore results available (continuationToken: ${result.data.continuationToken})` : ""}`
+      }]
+    };
+  }
+);
+
+server.tool(
+  "fabric_find_workspace",
+  "Find workspace by name and get its ID for use in other operations",
+  FindWorkspaceSchema.shape,
+  async ({ bearerToken, searchName }) => {
+    const result = await executeApiCall(
+      bearerToken,
+      authConfig.defaultWorkspaceId || "global",
+      "find-workspace", 
+      (client) => client.listWorkspaces(undefined, undefined, searchName) || 
+                  client.simulateWorkspaces(undefined, undefined, searchName),
+      { searchName }
+    );
+
+    if (result.status === 'error') {
+      return {
+        content: [{ type: "text", text: `Error: ${result.error}` }]
+      };
+    }
+
+    const workspaces = result.data?.workspaces || [];
+    const matchingWorkspaces = workspaces.filter((workspace: { name: string }) => 
+      workspace.name.toLowerCase().includes(searchName.toLowerCase())
+    );
+
+    if (matchingWorkspaces.length === 0) {
+      return {
+        content: [{ 
+          type: "text", 
+          text: `No workspaces found matching "${searchName}"\n\nTip: Try using the fabric_list_workspaces tool to see all available workspaces.` 
+        }]
+      };
+    }
+
+    if (matchingWorkspaces.length === 1) {
+      const workspace = matchingWorkspaces[0];
+      return {
+        content: [{
+          type: "text",
+          text: `✅ Found workspace: "${workspace.name}"\n\n📋 Details:\n• ID: ${workspace.id}\n• Type: ${workspace.type}\n• State: ${workspace.state}\n• Capacity ID: ${workspace.capacityId || "No capacity"}\n\n💡 You can now use this workspace ID (${workspace.id}) in other operations!`
+        }]
+      };
+    }
+
+    const workspacesList = matchingWorkspaces.map((workspace: { id: string; name: string; type: string; state: string; capacityId?: string }, index: number) => 
+      `${index + 1}. "${workspace.name}"\n   ID: ${workspace.id}\n   Type: ${workspace.type}\n   State: ${workspace.state}\n   Capacity ID: ${workspace.capacityId || "No capacity"}`
+    ).join("\n\n");
+
+    return {
+      content: [{
+        type: "text",
+        text: `Found ${matchingWorkspaces.length} workspaces matching "${searchName}":\n\n${workspacesList}\n\n💡 Copy the ID of the workspace you want to use for other operations.`
       }]
     };
   }
