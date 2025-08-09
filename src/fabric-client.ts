@@ -15,6 +15,20 @@ export interface ApiResponse<T = any> {
   error?: string;
 }
 
+export interface WorkspaceInfo {
+  id: string;
+  name: string;
+  type: string;
+  state: string;
+  capacityId?: string;
+}
+
+export interface WorkspacesResponse {
+  workspaces: WorkspaceInfo[];
+  continuationUri?: string;
+  continuationToken?: string;
+}
+
 export interface JobExecutionResult {
   id: string;
   status: string;
@@ -255,20 +269,34 @@ export class FabricApiClient {
 
   /**
    * List all workspaces accessible to the user using admin API.
-   * @param filter - Optional filter for workspace names
-   * @param top - Maximum number of workspaces to return
+   * @param type - Optional workspace type filter
+   * @param capacityId - Optional capacity ID filter
+   * @param name - Optional name filter
+   * @param state - Optional state filter (Active, Deleted, etc.)
    * @param continuationToken - Optional continuation token for pagination
    * @returns Promise resolving to workspaces list
    */
-  async listWorkspaces(filter?: string, top: number = 100, continuationToken?: string): Promise<ApiResponse> {
+  async listWorkspaces(
+    type?: string, 
+    capacityId?: string, 
+    name?: string, 
+    state?: string, 
+    continuationToken?: string
+  ): Promise<ApiResponse<WorkspacesResponse>> {
     // Use admin API endpoint for listing workspaces (bypasses workspace-specific URL)
     const url = new URL(`${this.config.apiBaseUrl}/admin/workspaces`);
     
-    if (filter) {
-      url.searchParams.append('$filter', `contains(name,'${filter}')`);
+    if (type) {
+      url.searchParams.append('type', type);
     }
-    if (top) {
-      url.searchParams.append('$top', top.toString());
+    if (capacityId) {
+      url.searchParams.append('capacityId', capacityId);
+    }
+    if (name) {
+      url.searchParams.append('name', name);
+    }
+    if (state) {
+      url.searchParams.append('state', state);
     }
     if (continuationToken) {
       url.searchParams.append('continuationToken', continuationToken);
@@ -301,7 +329,7 @@ export class FabricApiClient {
         };
       }
 
-      const data = await response.json();
+      const data = await response.json() as WorkspacesResponse;
       return {
         status: 'success',
         data
@@ -883,6 +911,88 @@ export class FabricApiClient {
         state: "CANCELLED",
         timestamp: new Date().toISOString()
       }
+    });
+  }
+
+  /**
+   * Simulate workspace listing data
+   */
+  simulateWorkspaces(
+    type?: string, 
+    capacityId?: string, 
+    name?: string, 
+    state?: string
+  ): Promise<ApiResponse<WorkspacesResponse>> {
+    const allWorkspaces: WorkspaceInfo[] = [
+      {
+        id: "41ce06d1-d81b-4ea0-bc6d-2ce3dd2f8e87",
+        name: "Sales Analytics Workspace",
+        type: "Workspace",
+        state: "Active",
+        capacityId: "41ce06d1-d81b-4ea0-bc6d-2ce3dd2f8e84"
+      },
+      {
+        id: "52df17e2-e92c-5fb1-cd7e-3df4ee3f9f98",
+        name: "Marketing Data Hub",
+        type: "Workspace", 
+        state: "Active",
+        capacityId: "52df17e2-e92c-5fb1-cd7e-3df4ee3f9f95"
+      },
+      {
+        id: "63e028f3-fa3d-6gc2-de8f-4ef5ff4a0a09",
+        name: "HR Analytics",
+        type: "Workspace",
+        state: "Active",
+        capacityId: "63e028f3-fa3d-6gc2-de8f-4ef5ff4a0a06"
+      },
+      {
+        id: "74f139g4-gb4e-7hd3-ef9g-5fg6gg5b1b10",
+        name: "Finance Reporting",
+        type: "Workspace",
+        state: "Active",
+        capacityId: "74f139g4-gb4e-7hd3-ef9g-5fg6gg5b1b07"
+      },
+      {
+        id: "85g24ah5-hc5f-8ie4-fgah-6gh7hh6c2c21",
+        name: "Customer Insights",
+        type: "Workspace",
+        state: "Active",
+        capacityId: "85g24ah5-hc5f-8ie4-fgah-6gh7hh6c2c18"
+      },
+      {
+        id: "96h35bi6-id6g-9jf5-ghbi-7hi8ii7d3d32",
+        name: "Operations Dashboard",
+        type: "Workspace",
+        state: "Deleted",
+        capacityId: "96h35bi6-id6g-9jf5-ghbi-7hi8ii7d3d29"
+      }
+    ];
+
+    // Apply filters
+    let filteredWorkspaces = allWorkspaces;
+
+    if (type) {
+      filteredWorkspaces = filteredWorkspaces.filter(w => w.type.toLowerCase().includes(type.toLowerCase()));
+    }
+    if (capacityId) {
+      filteredWorkspaces = filteredWorkspaces.filter(w => w.capacityId === capacityId);
+    }
+    if (name) {
+      filteredWorkspaces = filteredWorkspaces.filter(w => w.name.toLowerCase().includes(name.toLowerCase()));
+    }
+    if (state) {
+      filteredWorkspaces = filteredWorkspaces.filter(w => w.state.toLowerCase() === state.toLowerCase());
+    }
+
+    const mockResponse: WorkspacesResponse = {
+      workspaces: filteredWorkspaces,
+      continuationUri: filteredWorkspaces.length > 5 ? "https://api.fabric.microsoft.com/v1/admin/workspaces?continuationToken='LDEsMTAwMDAwLDA%3D'" : undefined,
+      continuationToken: filteredWorkspaces.length > 5 ? "LDEsMTAwMDAwLDA%3D" : undefined
+    };
+
+    return Promise.resolve({
+      status: 'success' as const,
+      data: mockResponse
     });
   }
 
