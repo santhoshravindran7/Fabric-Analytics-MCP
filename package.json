@@ -1,11 +1,12 @@
 {
   "name": "mcp-for-microsoft-fabric-analytics",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "MCP server for Microsoft Fabric Analytics - enables LLMs to access and analyze Microsoft Fabric data",
   "type": "module",
   "main": "./build/index.js",
   "bin": {
-    "fabric-analytics": "./build/index.js"
+    "fabric-analytics": "./build/index.js",
+    "fabric-analytics-mcp": "./build/index.js"
   },
   "scripts": {
     "build": "tsc",

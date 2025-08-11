@@ -1,0 +1,13 @@
+# Manifest file for including additional files in the Python package
+include README.md
+include LICENSE
+include CONTRIBUTING.md
+include SECURITY.md
+recursive-include fabric_analytics_mcp *.py
+recursive-include fabric_analytics_mcp/server *.js *.json *.md
+recursive-exclude fabric_analytics_mcp/server/node_modules *
+global-exclude __pycache__
+global-exclude *.py[co]
+global-exclude .DS_Store
+global-exclude *.so
+global-exclude .git*

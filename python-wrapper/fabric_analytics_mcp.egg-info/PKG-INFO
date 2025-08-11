@@ -1,0 +1,290 @@
+Metadata-Version: 2.4
+Name: fabric-analytics-mcp
+Version: 1.0.1
+Summary: Microsoft Fabric Analytics MCP Server - Enable AI assistants to access and analyze Microsoft Fabric data
+Home-page: https://github.com/santhoshravindran7/Fabric-Analytics-MCP
+Author: Santhosh Ravindran
+Author-email: santhoshravindran7@gmail.com
+Project-URL: Bug Tracker, https://github.com/santhoshravindran7/Fabric-Analytics-MCP/issues
+Project-URL: Documentation, https://github.com/santhoshravindran7/Fabric-Analytics-MCP#readme
+Project-URL: Source Code, https://github.com/santhoshravindran7/Fabric-Analytics-MCP
+Keywords: mcp,model-context-protocol,microsoft-fabric,analytics,data-analysis,llm,ai,claude,copilot,spark,livy,authentication,azure,powerbi,data-science
+Classifier: Development Status :: 5 - Production/Stable
+Classifier: Intended Audience :: Developers
+Classifier: Intended Audience :: Science/Research
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Classifier: Topic :: Scientific/Engineering :: Artificial Intelligence
+Classifier: Topic :: Database :: Database Engines/Servers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Operating System :: OS Independent
+Classifier: Environment :: Console
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+Requires-Dist: click>=8.0.0
+Requires-Dist: requests>=2.25.0
+Requires-Dist: packaging>=20.0
+Requires-Dist: setuptools>=40.0
+Provides-Extra: dev
+Requires-Dist: pytest>=6.0; extra == "dev"
+Requires-Dist: pytest-cov>=2.0; extra == "dev"
+Requires-Dist: black>=21.0; extra == "dev"
+Requires-Dist: flake8>=3.8; extra == "dev"
+Requires-Dist: mypy>=0.800; extra == "dev"
+Provides-Extra: async
+Requires-Dist: aiohttp>=3.8.0; extra == "async"
+Requires-Dist: asyncio>=3.4.3; extra == "async"
+Dynamic: author
+Dynamic: author-email
+Dynamic: classifier
+Dynamic: description
+Dynamic: description-content-type
+Dynamic: home-page
+Dynamic: keywords
+Dynamic: project-url
+Dynamic: provides-extra
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary
+
+# Microsoft Fabric Analytics MCP Server - Python Package
+
+[![PyPI version](https://badge.fury.io/py/fabric-analytics-mcp.svg)](https://badge.fury.io/py/fabric-analytics-mcp)
+[![Python Support](https://img.shields.io/pypi/pyversions/fabric-analytics-mcp.svg)](https://pypi.org/project/fabric-analytics-mcp/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+**Easy PyPI installation for Microsoft Fabric Analytics MCP Server**
+
+This Python package provides a convenient wrapper around the Microsoft Fabric Analytics MCP Server, enabling seamless installation and integration with AI assistants like Claude, GitHub Copilot, and other MCP-compatible clients.
+
+## 🚀 Quick Start
+
+```bash
+# Install from PyPI
+pip install fabric-analytics-mcp
+
+# Start the server
+fabric-analytics-mcp start
+
+# Validate installation
+fabric-analytics-mcp validate
+```
+
+## ✨ Features
+
+- **41+ Microsoft Fabric Tools** - Complete analytics toolkit
+- **Easy Installation** - Simple `pip install` command
+- **Cross-Platform** - Windows, macOS, Linux support
+- **Multiple Auth Methods** - Bearer token, Service Principal, Interactive
+- **Workspace Management** - Easy discovery and management
+- **Spark Integration** - Job monitoring and session management
+- **Notebook Support** - Execution and management
+- **Production Ready** - Battle-tested and reliable
+
+## 📋 Requirements
+
+- **Python 3.8+**
+- **Node.js 18+** (automatically validated)
+- **Microsoft Fabric Access** (with appropriate permissions)
+
+## 🔧 Installation
+
+### Option 1: Direct PyPI Installation (Recommended)
+
+```bash
+pip install fabric-analytics-mcp
+```
+
+### Option 2: Development Installation
+
+```bash
+git clone https://github.com/santhoshravindran7/Fabric-Analytics-MCP
+cd Fabric-Analytics-MCP/python-wrapper
+pip install -e .
+```
+
+## ⚙️ Configuration
+
+### Environment Variables
+
+```bash
+export FABRIC_AUTH_METHOD=bearer_token
+export FABRIC_CLIENT_ID=your-client-id
+export FABRIC_CLIENT_SECRET=your-client-secret  
+export FABRIC_TENANT_ID=your-tenant-id
+export FABRIC_DEFAULT_WORKSPACE_ID=your-workspace-id
+```
+
+### Claude Desktop Configuration
+
+Add to your `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "fabric-analytics": {
+      "command": "fabric-analytics-mcp",
+      "args": ["start"],
+      "env": {
+        "FABRIC_AUTH_METHOD": "bearer_token"
+      }
+    }
+  }
+}
+```
+
+### GitHub Copilot Configuration
+
+For VS Code with GitHub Copilot:
+
+```json
+{
+  "github.copilot.mcp.servers": {
+    "fabric-analytics": {
+      "command": "fabric-analytics-mcp",
+      "args": ["start"],
+      "env": {
+        "FABRIC_AUTH_METHOD": "bearer_token"
+      }
+    }
+  }
+}
+```
+
+## 🛠️ Usage
+
+### Command Line Interface
+
+```bash
+# Start the MCP server
+fabric-analytics-mcp start
+
+# Start with specific configuration
+fabric-analytics-mcp start --auth-method service_principal --workspace-id <id>
+
+# Validate installation
+fabric-analytics-mcp validate
+
+# Show configuration help
+fabric-analytics-mcp config
+
+# Get help
+fabric-analytics-mcp --help
+```
+
+### Python API
+
+```python
+from fabric_analytics_mcp import FabricMCPServer
+
+# Start server programmatically
+config = {
+    'FABRIC_AUTH_METHOD': 'bearer_token',
+    'FABRIC_DEFAULT_WORKSPACE_ID': 'your-workspace-id'
+}
+
+with FabricMCPServer(config) as server:
+    # Server is running
+    tools = server.list_tools()
+    print(f"Available tools: {len(tools['result']['tools'])}")
+```
+
+## 🏢 Available Tools
+
+The server provides 41+ tools for Microsoft Fabric analytics:
+
+### Workspace Management
+- `fabric_list_workspaces` - List all accessible workspaces
+- `fabric_find_workspace` - Find workspace by name
+- `fabric_create_workspace` - Create new workspace
+
+### Item Management  
+- `list-fabric-items` - List workspace items
+- `create-fabric-item` - Create new items
+- `update-fabric-item` - Update existing items
+- `delete-fabric-item` - Delete items
+
+### Notebook Operations
+- `create-fabric-notebook` - Create notebooks
+- `execute-fabric-notebook` - Run notebooks
+- `get-fabric-notebook-definition` - Get notebook content
+
+### Spark Integration
+- `submit-spark-job` - Submit Spark jobs
+- `get-job-status` - Monitor job status
+- `create-livy-session` - Create interactive sessions
+- `execute-livy-statement` - Run Spark code
+
+### Monitoring & Analytics
+- `get-spark-monitoring-dashboard` - Performance insights
+- `analyze-livy-session-logs` - Log analysis
+- `get-workspace-spark-applications` - Application monitoring
+
+[View complete tool list →](https://github.com/santhoshravindran7/Fabric-Analytics-MCP#-available-tools)
+
+## 🔐 Authentication
+
+### Bearer Token (Recommended for Development)
+```bash
+export FABRIC_AUTH_METHOD=bearer_token
+# Get token from Fabric portal
+```
+
+### Service Principal (Recommended for Production)
+```bash
+export FABRIC_AUTH_METHOD=service_principal
+export FABRIC_CLIENT_ID=your-app-id
+export FABRIC_CLIENT_SECRET=your-secret
+export FABRIC_TENANT_ID=your-tenant-id
+```
+
+### Interactive Login
+```bash
+export FABRIC_AUTH_METHOD=interactive
+# Opens browser for authentication
+```
+
+## 🔍 Validation
+
+Ensure everything is working correctly:
+
+```bash
+# Validate installation
+fabric-analytics-mcp validate
+
+# Test server startup
+fabric-analytics-mcp start --validate
+
+# Check tool availability
+echo '{"jsonrpc": "2.0", "id": 1, "method": "tools/list"}' | fabric-analytics-mcp start
+```
+
+## 📚 Documentation
+
+- **[Full Documentation](https://github.com/santhoshravindran7/Fabric-Analytics-MCP)**
+- **[API Reference](https://github.com/santhoshravindran7/Fabric-Analytics-MCP/blob/master/docs/)**
+- **[Examples](https://github.com/santhoshravindran7/Fabric-Analytics-MCP/blob/master/EXAMPLES.md)**
+- **[Troubleshooting](https://github.com/santhoshravindran7/Fabric-Analytics-MCP/blob/master/TROUBLESHOOTING.md)**
+
+## 🤝 Support
+
+- **Issues**: [GitHub Issues](https://github.com/santhoshravindran7/Fabric-Analytics-MCP/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/santhoshravindran7/Fabric-Analytics-MCP/discussions)
+- **Email**: santhoshravindran7@gmail.com
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](https://github.com/santhoshravindran7/Fabric-Analytics-MCP/blob/master/LICENSE) file for details.
+
+## 🙏 Contributing
+
+Contributions are welcome! Please read our [Contributing Guide](https://github.com/santhoshravindran7/Fabric-Analytics-MCP/blob/master/CONTRIBUTING.md) for details.
+
+---
+
+**Developed by [Santhosh Ravindran](https://github.com/santhoshravindran7)** ✨
