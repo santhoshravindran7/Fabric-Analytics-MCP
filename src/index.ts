@@ -431,6 +431,14 @@ const SparkApplicationOperationSchema = BaseWorkspaceSchema.extend({
   livyId: z.string().min(1).describe("Livy session/application ID")
 });
 
+const NotebookSparkApplicationSchema = BaseWorkspaceSchema.extend({
+  notebookId: z.string().min(1).describe("Notebook ID"),
+  livyId: z.string().min(1).describe("Livy session ID"),
+  appId: z.string().min(1).describe("Spark application ID (e.g., application_1742369571479_0001)"),
+  attemptId: z.string().optional().describe("Optional attempt ID"),
+  jobId: z.string().optional().describe("Optional specific job ID for job details")
+});
+
 const SparkDashboardSchema = BaseWorkspaceSchema.extend({
   includeCompleted: z.boolean().default(true).describe("Include completed applications"),
   maxResults: z.number().min(1).max(1000).default(100).describe("Maximum number of results")
@@ -1330,6 +1338,63 @@ server.tool(
       content: [{ 
         type: "text", 
         text: `Spark Application ${livyId} cancellation request submitted:\n\n${JSON.stringify(result.data, null, 2)}` 
+      }]
+    };
+  }
+);
+
+server.tool(
+  "get-notebook-spark-application-details",
+  "Get detailed information about a specific Spark application from a notebook session",
+  NotebookSparkApplicationSchema.shape,
+  async ({ bearerToken, workspaceId, notebookId, livyId, appId, attemptId }) => {
+    const result = await executeApiCall(
+      bearerToken,
+      workspaceId,
+      "get-notebook-spark-application-details",
+      (client) => client.getNotebookSparkApplicationDetails?.(notebookId, livyId, appId, attemptId),
+      { notebookId, livyId, appId, attemptId }
+    );
+
+    if (result.status === 'error') {
+      return {
+        content: [{ type: "text", text: `Error getting notebook Spark application details: ${result.error}` }]
+      };
+    }
+
+    return {
+      content: [{ 
+        type: "text", 
+        text: `Notebook ${notebookId} Spark Application ${appId} Details:\n\n${JSON.stringify(result.data, null, 2)}` 
+      }]
+    };
+  }
+);
+
+server.tool(
+  "get-notebook-spark-application-jobs",
+  "Get jobs for a specific Spark application from a notebook session",
+  NotebookSparkApplicationSchema.shape,
+  async ({ bearerToken, workspaceId, notebookId, livyId, appId, jobId, attemptId }) => {
+    const result = await executeApiCall(
+      bearerToken,
+      workspaceId,
+      "get-notebook-spark-application-jobs",
+      (client) => client.getNotebookSparkApplicationJobs?.(notebookId, livyId, appId, jobId, attemptId),
+      { notebookId, livyId, appId, jobId, attemptId }
+    );
+
+    if (result.status === 'error') {
+      return {
+        content: [{ type: "text", text: `Error getting notebook Spark application jobs: ${result.error}` }]
+      };
+    }
+
+    const jobText = jobId ? `Job ${jobId}` : "Jobs";
+    return {
+      content: [{ 
+        type: "text", 
+        text: `Notebook ${notebookId} Spark Application ${appId} ${jobText}:\n\n${JSON.stringify(result.data, null, 2)}` 
       }]
     };
   }
