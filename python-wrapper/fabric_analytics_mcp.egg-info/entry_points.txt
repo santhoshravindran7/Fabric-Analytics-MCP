@@ -1,0 +1,3 @@
+[console_scripts]
+fabric-analytics-mcp = fabric_analytics_mcp.cli:main
+fabric-mcp = fabric_analytics_mcp.cli:main

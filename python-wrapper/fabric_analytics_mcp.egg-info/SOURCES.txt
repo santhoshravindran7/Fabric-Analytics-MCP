@@ -1,0 +1,13 @@
+MANIFEST.in
+README.md
+setup.py
+fabric_analytics_mcp/__init__.py
+fabric_analytics_mcp/cli.py
+fabric_analytics_mcp/server_manager.py
+fabric_analytics_mcp.egg-info/PKG-INFO
+fabric_analytics_mcp.egg-info/SOURCES.txt
+fabric_analytics_mcp.egg-info/dependency_links.txt
+fabric_analytics_mcp.egg-info/entry_points.txt
+fabric_analytics_mcp.egg-info/not-zip-safe
+fabric_analytics_mcp.egg-info/requires.txt
+fabric_analytics_mcp.egg-info/top_level.txt

@@ -3,8 +3,11 @@
 # Microsoft Fabric Analytics MCP Server
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![PyPI version](https://badge.fury.io/py/fabric-analytics-mcp.svg)](https://badge.fury.io/py/fabric-analytics-mcp)
+[![npm version](https://badge.fury.io/js/mcp-for-microsoft-fabric-analytics.svg)](https://badge.fury.io/js/mcp-for-microsoft-fabric-analytics)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue.svg)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-18+-green.svg)](https://nodejs.org/)
+[![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://python.org/)
 [![Model Context Protocol](https://img.shields.io/badge/MCP-Compatible-purple.svg)](https://modelcontextprotocol.io/)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](http://makeapullrequest.com)
 [![GitHub issues](https://img.shields.io/github/issues/santhoshravindran7/Fabric-Analytics-MCP.svg)](https://github.com/santhoshravindran7/Fabric-Analytics-MCP/issues)
@@ -517,47 +520,149 @@ The MCP server provides comprehensive notebook management capabilities with pred
 
 ## 🚀 **Quick Start**
 
-### **Prerequisites**
-- Node.js 18+ and npm
-- Microsoft Fabric workspace access
-- Claude Desktop (for AI integration)
+### **🎯 Installation Methods**
 
-### **Installation & Setup**
+Choose your preferred installation method:
 
-1. **Clone and Install**
-   ```bash
-   git clone https://github.com/santhoshravindran7/Fabric-Analytics-MCP.git
-   cd Fabric-Analytics-MCP
-   npm install
-   npm run build    # ✅ All configuration files included!
-   ```
+#### **Option 1: Python Package (PyPI) ⭐ Recommended**
+```bash
+# Install via pip (easiest method)
+pip install fabric-analytics-mcp
 
-   > **📝 Note**: All essential configuration files (`tsconfig.json`, `jest.config.json`, etc.) are now properly included in the repository. Previous build issues have been resolved.
+# Verify installation
+fabric-analytics --version
 
-2. **Configure Claude Desktop**
-   
-   Add to your Claude Desktop config:
-   
-   **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`  
-   **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
-   
-   ```json
-   {
-     "mcpServers": {
-       "fabric-analytics": {
-         "command": "node",
-         "args": ["/ABSOLUTE/PATH/TO/PROJECT/build/index.js"]
-       }
-     }
-   }
-   ```
+# Start the server
+fabric-analytics-mcp start
+```
 
-3. **Start Using**
-   
-   Restart Claude Desktop and try these queries:   - *"List all items in my Fabric workspace [your-workspace-id]"*
-   - *"Create a new lakehouse called 'Analytics Hub'"*
-   - *"Show me all running Spark applications"*
-   - *"Execute this SQL query: SELECT * FROM my_table LIMIT 10"*
+#### **Option 2: NPM Package**
+```bash
+# Install globally via npm
+npm install -g mcp-for-microsoft-fabric-analytics
+
+# Verify installation
+fabric-analytics --version
+
+# Start the server
+fabric-analytics
+
+# Or using npx (no installation required)
+npx mcp-for-microsoft-fabric-analytics
+```
+
+#### **Option 3: Universal Installation Script**
+
+For automated setup with environment configuration:
+
+**Unix/Linux/macOS:**
+```bash
+# Download and run universal installer
+curl -fsSL https://raw.githubusercontent.com/santhoshravindran7/Fabric-Analytics-MCP/main/scripts/install-universal.sh | bash
+
+# Or with options for full setup
+curl -fsSL https://raw.githubusercontent.com/santhoshravindran7/Fabric-Analytics-MCP/main/scripts/install-universal.sh | bash -s -- --method pip --config --env --test
+```
+
+**Windows (PowerShell):**
+```powershell
+# Download and run Windows installer
+iex ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/santhoshravindran7/Fabric-Analytics-MCP/main/scripts/install-windows.ps1'))
+
+# Or with options for full setup
+& ([scriptblock]::Create((iwr https://raw.githubusercontent.com/santhoshravindran7/Fabric-Analytics-MCP/main/scripts/install-windows.ps1).Content)) -Method pip -Config -Environment -Test
+```
+
+#### **Option 4: Docker**
+```bash
+# Clone repository
+git clone https://github.com/santhoshravindran7/Fabric-Analytics-MCP.git
+cd Fabric-Analytics-MCP
+
+# Build and run with Docker
+docker build -t fabric-analytics-mcp .
+docker run -d --name fabric-mcp -p 3000:3000 --env-file .env fabric-analytics-mcp
+```
+
+📖 **See [Docker Installation Guide](scripts/DOCKER_INSTALL.md) for detailed Docker and Kubernetes deployment options.**
+
+#### **Option 5: From Source (Development)**
+```bash
+# Clone and build from source
+git clone https://github.com/santhoshravindran7/Fabric-Analytics-MCP.git
+cd Fabric-Analytics-MCP
+npm install
+npm run build    # ✅ All configuration files included!
+```
+
+### **⚙️ Configuration**
+
+Set up your environment variables:
+```bash
+export FABRIC_AUTH_METHOD=bearer_token  # or service_principal, interactive
+export FABRIC_CLIENT_ID=your-client-id
+export FABRIC_CLIENT_SECRET=your-client-secret
+export FABRIC_TENANT_ID=your-tenant-id
+export FABRIC_DEFAULT_WORKSPACE_ID=your-workspace-id
+```
+
+### **🔧 Claude Desktop Setup**
+
+Add to your Claude Desktop config:
+
+**Windows**: `%APPDATA%\Claude\claude_desktop_config.json`  
+**macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+
+#### **For PyPI Installation:**
+```json
+{
+  "mcpServers": {
+    "fabric-analytics": {
+      "command": "fabric-analytics-mcp",
+      "args": ["start"],
+      "env": {
+        "FABRIC_AUTH_METHOD": "bearer_token"
+      }
+    }
+  }
+}
+```
+
+#### **For NPM Installation:**
+```json
+{
+  "mcpServers": {
+    "fabric-analytics": {
+      "command": "fabric-analytics",
+      "env": {
+        "FABRIC_AUTH_METHOD": "bearer_token"
+      }
+    }
+  }
+}
+```
+
+#### **For Source Installation:**
+```json
+{
+  "mcpServers": {
+    "fabric-analytics": {
+      "command": "node",
+      "args": ["/ABSOLUTE/PATH/TO/PROJECT/build/index.js"]
+    }
+  }
+}
+```
+
+### **🚀 Start Using**
+
+Restart Claude Desktop and try these queries:
+- *"List all workspaces I have access to"*
+- *"Find workspace named 'Analytics'"*
+- *"List all items in my Fabric workspace [your-workspace-id]"*
+- *"Create a new lakehouse called 'Analytics Hub'"*
+- *"Show me all running Spark applications"*
+- *"Execute this SQL query: SELECT * FROM my_table LIMIT 10"*
 
 ## 🧪 **Development & Testing**
 
