@@ -1,0 +1,15 @@
+{
+  "azureOpenAI": {
+    "apiKey": "YOUR_AZURE_OPENAI_API_KEY",
+    "endpoint": "https://your-azure-openai-endpoint.cognitiveservices.azure.com/",
+    "apiVersion": "2025-01-01-preview",
+    "deploymentName": "YOUR_DEPLOYMENT_NAME",
+    "model": "gpt-4",
+    "maxTokens": 2000,
+    "temperature": 0.3
+  },
+  "analysis": {
+    "enableLLMAnalysis": true,
+    "analysisTypes": ["performance", "optimization", "recommendations", "error_patterns"]
+  }
+}

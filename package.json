@@ -73,7 +73,9 @@
   "dependencies": {
     "@azure/msal-node": "^2.16.2",
     "@modelcontextprotocol/sdk": "^1.13.0",
+    "@types/node-fetch": "^2.6.13",
     "child_process": "^1.0.2",
+    "node-fetch": "^3.3.2",
     "zod": "^3.25.67"
   }
 }

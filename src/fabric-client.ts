@@ -675,6 +675,52 @@ export class FabricApiClient {
   }
 
   /**
+   * Get detailed information about a specific Spark application from a notebook session.
+   * @param notebookId - ID of the notebook
+   * @param livyId - ID of the Livy session
+   * @param appId - Spark application ID (e.g., application_1742369571479_0001)
+   * @param attemptId - Optional attempt ID
+   * @returns Promise resolving to application details
+   */
+  async getNotebookSparkApplicationDetails(
+    notebookId: string, 
+    livyId: string, 
+    appId: string, 
+    attemptId?: string
+  ): Promise<ApiResponse<any>> {
+    const basePath = `notebooks/${notebookId}/livySessions/${livyId}/applications/${appId}`;
+    const url = attemptId ? `${basePath}/${attemptId}` : basePath;
+    return this.makeRequest(url);
+  }
+
+  /**
+   * Get jobs for a specific Spark application from a notebook session.
+   * @param notebookId - ID of the notebook
+   * @param livyId - ID of the Livy session
+   * @param appId - Spark application ID
+   * @param jobId - Optional specific job ID
+   * @param attemptId - Optional attempt ID
+   * @returns Promise resolving to job details
+   */
+  async getNotebookSparkApplicationJobs(
+    notebookId: string, 
+    livyId: string, 
+    appId: string, 
+    jobId?: string,
+    attemptId?: string
+  ): Promise<ApiResponse<any>> {
+    let basePath = `notebooks/${notebookId}/livySessions/${livyId}/applications/${appId}`;
+    if (attemptId) {
+      basePath += `/${attemptId}`;
+    }
+    basePath += '/jobs';
+    if (jobId) {
+      basePath += `/${jobId}`;
+    }
+    return this.makeRequest(basePath);
+  }
+
+  /**
    * Cancel a running Spark application.
    * @param livyId - ID of the Livy session/application to cancel
    * @returns Promise resolving to cancellation result
