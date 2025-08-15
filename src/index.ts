@@ -8,7 +8,26 @@ import { SimulationService } from './simulation-service.js';
 import { MicrosoftAuthClient, AuthMethod, AuthResult } from './auth-client.js';
 import http from 'http';
 import url from 'url';
-
+/**
+ * 
+ * This a is a safe date formatter that handles various edge cases:
+ * 
+ */
+function safeFormatDate(dateValue: any): string {
+  if (!dateValue || dateValue === null || dateValue === undefined) {
+    return 'N/A';
+  }
+  
+  try {
+    const date = new Date(dateValue);
+    if (isNaN(date.getTime())) {
+      return 'N/A';
+    }
+    return date.toLocaleString();
+  } catch (e) {
+    return 'N/A';
+  }
+}
 
 
 // Type definitions for Fabric items
@@ -602,8 +621,8 @@ const AnalyzeFabricRunPerformanceSchema = BaseWorkspaceSchema.extend({
 interface FabricRun {
   id: string;
   status: string;
-  startTime: string;
-  endTime?: string;
+  startTimeUtc: string;
+  endTimeUtc?: string;
   itemId: string;
   itemType: string;
   duration?: string;
@@ -687,9 +706,9 @@ function analyzeRunsSummary(runs: FabricRun[]): RunAnalysis {
   const failedRuns = runs.filter(r => r.status === "Failed").length;
   const runningRuns = runs.filter(r => r.status === "Running" || r.status === "InProgress").length;
   
-  const completedRuns = runs.filter(r => r.endTime);
+  const completedRuns = runs.filter(r => r.endTimeUtc);
   const durations = completedRuns
-    .map(r => calculateDuration(r.startTime, r.endTime!))
+    .map(r => calculateDuration(r.startTimeUtc, r.endTimeUtc!))
     .filter(d => d > 0);
   
   const averageDuration = durations.length > 0 
@@ -698,12 +717,12 @@ function analyzeRunsSummary(runs: FabricRun[]): RunAnalysis {
 
   const recentFailures = runs
     .filter(r => r.status === "Failed")
-    .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime())
+    .sort((a, b) => new Date(b.startTimeUtc).getTime() - new Date(a.startTimeUtc).getTime())
     .slice(0, 5);
 
   const longestRunningJobs = runs
     .filter(r => r.status === "Running")
-    .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
+    .sort((a, b) => new Date(a.startTimeUtc).getTime() - new Date(b.startTimeUtc).getTime())
     .slice(0, 3);
 
   return {
@@ -756,14 +775,14 @@ function analyzeSubactivities(subactivities: FabricSubactivity[]): SubactivityAn
  */
 function filterRecentRuns(runs: FabricRun[], hoursBack: number): FabricRun[] {
   const cutoff = new Date(Date.now() - hoursBack * 60 * 60 * 1000);
-  return runs.filter(run => new Date(run.startTime) >= cutoff);
+  return runs.filter(run => new Date(run.startTimeUtc) >= cutoff);
 }
 
 /**
  * Analyze single run with subactivities
  */
 function analyzeSingleRun(run: FabricRun, subactivities: FabricSubactivity[]): any {
-  const duration = run.endTime ? calculateDuration(run.startTime, run.endTime) : null;
+  const duration = run.endTimeUtc ? calculateDuration(run.startTimeUtc, run.endTimeUtc) : null;
   const subactivityAnalysis = analyzeSubactivities(subactivities);
   
   return {
@@ -4631,11 +4650,11 @@ server.tool(
                         run.status === "Failed" ? "❌" : 
                         run.status === "Running" ? "🏃" : "⏸️";
       
-      const duration = run.endTime ? formatDuration(calculateDuration(run.startTime, run.endTime)) : "In progress";
+      const duration = run.endTimeUtc ? formatDuration(calculateDuration(run.startTimeUtc, run.endTimeUtc)) : "In progress";
       
       output += `${index + 1}. ${statusIcon} **${run.id}**\n`;
       output += `   Status: ${run.status}\n`;
-      output += `   Started: ${new Date(run.startTime).toLocaleString()}\n`;
+      output += `   Started: ${new Date(run.startTimeUtc).toLocaleString()}\n`;
       output += `   Duration: ${duration}\n`;
       if (run.errorMessage) {
         output += `   Error: ${run.errorMessage}\n`;
@@ -4646,7 +4665,7 @@ server.tool(
     if (analysis.recentFailures.length > 0) {
       output += `\n## 🚨 Recent Failures:\n`;
       analysis.recentFailures.slice(0, 3).forEach((failure, index) => {
-        output += `${index + 1}. ${failure.id} - ${new Date(failure.startTime).toLocaleString()}\n`;
+        output += `${index + 1}. ${failure.id} - ${new Date(failure.startTimeUtc).toLocaleString()}\n`;
         if (failure.errorMessage) {
           output += `   Error: ${failure.errorMessage}\n`;
         }
@@ -4687,8 +4706,16 @@ server.tool(
         }
 
         const runData = await runResponse.json();
-
-        // Get subactivities if requested
+// 🔍 ADD THIS DEBUG CODE:
+console.log("=== RAW API RESPONSE DEBUG ===");
+console.log("Full runData object:", JSON.stringify(runData, null, 2));
+console.log("=== DATE FIELDS ANALYSIS ===");
+console.log("startTime:", typeof runData.startTime, "=", runData.startTime);
+console.log("endTime:", typeof runData.endTime, "=", runData.endTime);
+console.log("createdDateTime:", typeof runData.createdDateTime, "=", runData.createdDateTime);
+console.log("lastUpdatedTime:", typeof runData.lastUpdatedTime, "=", runData.lastUpdatedTime);
+console.log("================================");
+         // Get subactivities if requested
         let subactivities: FabricSubactivity[] = [];
         if (includeSubactivities) {
           try {
@@ -4740,8 +4767,8 @@ server.tool(
 **Invoke Type:** ${run.invokeType || 'N/A'}
 
 ## Timing:
-- **Started:** ${new Date(run.startTime).toLocaleString()}
-- **Ended:** ${run.endTime ? new Date(run.endTime).toLocaleString() : 'Still running'}
+- **Started:** ${safeFormatDate(run.startTimeUtc)}
+- **Ended:** ${safeFormatDate(run.endTimeUtc)}
 - **Duration:** ${analysis.duration}
 
 ## Analysis:
@@ -4948,7 +4975,7 @@ server.tool(
 
             if (runsResponse.ok) {
               const runsData = await runsResponse.json();
-              const allRuns = runsData.value || [];
+             const allRuns = runsData.value || [];
               const recentRuns = filterRecentRuns(allRuns, hoursBack);
               
               if (recentRuns.length > 0) {
@@ -5084,6 +5111,7 @@ server.tool(
         }
 
         const runData = await runResponse.json();
+         
 
         // Get subactivities
         const activitiesUrl = `https://api.fabric.microsoft.com/v1/workspaces/${workspaceId}/items/${itemId}/jobs/instances/${jobInstanceId}/activities`;
@@ -5126,12 +5154,12 @@ server.tool(
       };
     }
     const { run, subactivities } = runData;
-    const analysis = analyzeSingleRun(run, subactivities);
-    const recommendations = generatePerformanceRecommendations(run, subactivities, analysisType);
+     const analysis = analyzeSingleRun(run, subactivities);
+    const recommendations = generatePerformanceRecommendations(run, subactivities, analysisType);   // After: const { run, subactivities } = result.data;
 
     // Calculate additional metrics based on analysis type
     const performanceMetrics = {
-      totalDuration: run.endTime ? calculateDuration(run.startTime, run.endTime) : null,
+      totalDuration: run.endTimeUtc ? calculateDuration(run.StartTimeUtc, run.endTimeUtc) : null,
       totalSubactivities: subactivities.length,
       completedSubactivities: subactivities.filter(a => a.status === "Succeeded").length,
       failedSubactivities: subactivities.filter(a => a.status === "Failed").length,
