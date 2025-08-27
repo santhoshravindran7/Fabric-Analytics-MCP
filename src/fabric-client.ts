@@ -64,7 +64,7 @@ export interface LivyStatementConfig {
 }
 
 export interface LivySessionResult {
-  id: number;
+  id: string; // UUID returned by Fabric API
   name?: string;
   appId?: string;
   owner?: string;
@@ -486,10 +486,10 @@ export class FabricApiClient {
   /**
    * Get the status of a Livy session.
    * @param lakehouseId - ID of the lakehouse
-   * @param sessionId - ID of the Livy session
+   * @param sessionId - ID of the Livy session (UUID string)
    * @returns Promise resolving to session status
    */
-  async getLivySession(lakehouseId: string, sessionId: number): Promise<ApiResponse<LivySessionResult>> {
+  async getLivySession(lakehouseId: string, sessionId: string): Promise<ApiResponse<LivySessionResult>> {
     const url = `lakehouses/${lakehouseId}/livyapi/versions/2023-12-01/sessions/${sessionId}`;
     return this.makeRequest(url);
   }
@@ -507,10 +507,10 @@ export class FabricApiClient {
   /**
    * Delete a Livy session.
    * @param lakehouseId - ID of the lakehouse
-   * @param sessionId - ID of the Livy session to delete
+   * @param sessionId - ID of the Livy session to delete (UUID string)
    * @returns Promise resolving to deletion result
    */
-  async deleteLivySession(lakehouseId: string, sessionId: number): Promise<ApiResponse> {
+  async deleteLivySession(lakehouseId: string, sessionId: string): Promise<ApiResponse> {
     const url = `lakehouses/${lakehouseId}/livyapi/versions/2023-12-01/sessions/${sessionId}`;
     return this.makeRequest(url, { method: "DELETE" });
   }
@@ -518,13 +518,13 @@ export class FabricApiClient {
   /**
    * Execute a statement in a Livy session.
    * @param lakehouseId - ID of the lakehouse
-   * @param sessionId - ID of the Livy session
+   * @param sessionId - ID of the Livy session (UUID string)
    * @param statement - Statement configuration
    * @returns Promise resolving to statement execution result
    */
   async executeLivyStatement(
     lakehouseId: string, 
-    sessionId: number, 
+    sessionId: string, 
     statement: LivyStatementConfig
   ): Promise<ApiResponse<LivyStatementResult>> {
     const url = `lakehouses/${lakehouseId}/livyapi/versions/2023-12-01/sessions/${sessionId}/statements`;
@@ -537,13 +537,13 @@ export class FabricApiClient {
   /**
    * Get the result of a statement execution.
    * @param lakehouseId - ID of the lakehouse
-   * @param sessionId - ID of the Livy session
+   * @param sessionId - ID of the Livy session (UUID string)
    * @param statementId - ID of the statement
    * @returns Promise resolving to statement result
    */
   async getLivyStatement(
     lakehouseId: string, 
-    sessionId: number, 
+    sessionId: string, 
     statementId: number
   ): Promise<ApiResponse<LivyStatementResult>> {
     const url = `lakehouses/${lakehouseId}/livyapi/versions/2023-12-01/sessions/${sessionId}/statements/${statementId}`;
@@ -553,10 +553,10 @@ export class FabricApiClient {
   /**
    * List all statements in a Livy session.
    * @param lakehouseId - ID of the lakehouse
-   * @param sessionId - ID of the Livy session
+   * @param sessionId - ID of the Livy session (UUID string)
    * @returns Promise resolving to list of statements
    */
-  async listLivyStatements(lakehouseId: string, sessionId: number): Promise<ApiResponse<{ statements: LivyStatementResult[] }>> {
+  async listLivyStatements(lakehouseId: string, sessionId: string): Promise<ApiResponse<{ statements: LivyStatementResult[] }>> {
     const url = `lakehouses/${lakehouseId}/livyapi/versions/2023-12-01/sessions/${sessionId}/statements`;
     return this.makeRequest(url);
   }

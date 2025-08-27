@@ -387,19 +387,19 @@ const LivySessionSchema = BaseWorkspaceSchema.extend({
 
 const LivySessionOperationSchema = BaseWorkspaceSchema.extend({
   lakehouseId: z.string().min(1).describe("Lakehouse ID"),
-  sessionId: z.number().min(0).describe("Livy session ID")
+  sessionId: z.string().min(1).describe("Livy session ID (UUID)")
 });
 
 const LivyStatementSchema = BaseWorkspaceSchema.extend({
   lakehouseId: z.string().min(1).describe("Lakehouse ID"),
-  sessionId: z.number().min(0).describe("Livy session ID"),
+  sessionId: z.string().min(1).describe("Livy session ID (UUID)"),
   code: z.string().min(1).describe("Code to execute"),
   kind: z.enum(["spark", "pyspark", "sparkr", "sql"]).optional().describe("Statement kind")
 });
 
 const LivyStatementOperationSchema = BaseWorkspaceSchema.extend({
   lakehouseId: z.string().min(1).describe("Lakehouse ID"),
-  sessionId: z.number().min(0).describe("Livy session ID"),
+  sessionId: z.string().min(1).describe("Livy session ID (UUID)"),
   statementId: z.number().min(0).describe("Statement ID")
 });
 
@@ -468,14 +468,14 @@ const SparkDashboardSchema = BaseWorkspaceSchema.extend({
 // Enhanced Livy Log Analysis Schemas
 const LivySessionLogAnalysisSchema = BaseWorkspaceSchema.extend({
   lakehouseId: z.string().min(1).describe("Lakehouse ID"),
-  sessionId: z.number().min(0).describe("Livy session ID"),
+  sessionId: z.string().min(1).describe("Livy session ID (UUID string)"),
   analysisType: z.enum(["summary", "detailed", "performance", "errors", "recommendations"]).default("detailed").describe("Type of log analysis to perform"),
   useLLM: z.boolean().default(true).describe("Use LLM for intelligent log analysis")
 });
 
 const LivyStatementLogAnalysisSchema = BaseWorkspaceSchema.extend({
   lakehouseId: z.string().min(1).describe("Lakehouse ID"), 
-  sessionId: z.number().min(0).describe("Livy session ID"),
+  sessionId: z.string().min(1).describe("Livy session ID (UUID string)"),
   statementId: z.number().min(0).describe("Statement ID to analyze"),
   analysisType: z.enum(["performance", "errors", "optimization", "comprehensive"]).default("comprehensive").describe("Type of analysis to perform"),
   includeRecommendations: z.boolean().default(true).describe("Include optimization recommendations")
@@ -483,7 +483,7 @@ const LivyStatementLogAnalysisSchema = BaseWorkspaceSchema.extend({
 
 const LivyExecutionHistorySchema = BaseWorkspaceSchema.extend({
   lakehouseId: z.string().min(1).describe("Lakehouse ID"),
-  sessionId: z.number().min(0).optional().describe("Optional specific session ID to analyze"),
+  sessionId: z.string().min(1).optional().describe("Optional specific session ID to analyze (UUID string)"),
   timeRange: z.enum(["1h", "6h", "24h", "7d", "30d"]).default("24h").describe("Time range for history analysis"),
   analysisType: z.enum(["performance_trends", "error_patterns", "resource_usage", "comprehensive"]).default("comprehensive").describe("Type of historical analysis")
 });
@@ -2139,7 +2139,7 @@ ${JSON.stringify(dashboard.applications, null, 2)}
 // ==================== LLM-POWERED ANALYSIS HELPERS ====================
 
 interface SessionInfo {
-  id: number;
+  id: string; // UUID returned by Fabric API
   state: string;
   kind: string;
   appInfo?: Record<string, unknown>;
