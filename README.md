@@ -1328,3 +1328,6 @@ For issues and questions:
 - **Anthropic** for the Model Context Protocol specification
 
 *This project began as my weekend hack project exploring AI integration with Microsoft Fabric. During a casual conversation with Chris and Bogdan about making AI tooling more accessible. What started as a personal experiment over a weekend is now available for everyone to build upon.*
+
+
+[![Verified on MSeeP](https://mseep.ai/badge.svg)](https://mseep.ai/app/5232d59b-7079-451e-95d3-cce79b2e60f4)
