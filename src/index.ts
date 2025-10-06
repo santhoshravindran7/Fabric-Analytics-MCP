@@ -1130,7 +1130,7 @@ async function executeApiCall<T>(
     // Try direct Azure CLI command execution since auth client might fail in isolated process
     try {
       const { execSync } = require('child_process');
-      const command = 'az account get-access-token --resource "https://analysis.windows.net/powerbi/api" --query "accessToken" --output tsv';
+      const command = 'az account get-access-token --resource "https://api.fabric.microsoft.com" --query "accessToken" --output tsv';
       const directToken = execSync(command, { 
         encoding: 'utf8',
         timeout: 30000, // 30 second timeout
@@ -1159,7 +1159,7 @@ async function executeApiCall<T>(
 Troubleshooting steps:
 1. Ensure Azure CLI is installed and in PATH
 2. Run 'az login' in your terminal
-3. Verify token with: az account get-access-token --resource "https://analysis.windows.net/powerbi/api"
+3. Verify token with: az account get-access-token --resource "https://api.fabric.microsoft.com"
 4. Restart VS Code to refresh the MCP server process
 5. Alternative: Use bearerToken with actual token value instead of "azure_cli"`
         };

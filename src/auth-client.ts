@@ -287,7 +287,7 @@ export class MicrosoftAuthClient {
    * Authenticate using Azure CLI
    * Uses the current Azure CLI login session
    */
-  async authenticateWithAzureCli(resource: string = "https://analysis.windows.net/powerbi/api"): Promise<AuthResult | null> {
+  async authenticateWithAzureCli(resource: string = "https://api.fabric.microsoft.com"): Promise<AuthResult | null> {
     try {
       // Get access token using Azure CLI
       const { stdout } = await execAsync(`az account get-access-token --resource "${resource}" --query "accessToken" --output tsv`);
