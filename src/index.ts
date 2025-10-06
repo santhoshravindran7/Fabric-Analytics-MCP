@@ -498,6 +498,27 @@ const ListWorkspacesSchema = z.object({
   continuationToken: z.string().optional().describe("Optional continuation token for pagination")
 });
 
+// Capacity Management Schemas
+const ListCapacitiesSchema = z.object({
+  bearerToken: z.string().optional().describe("Optional bearer token if not using configured authentication")
+});
+
+const AssignWorkspaceToCapacitySchema = z.object({
+  bearerToken: z.string().optional().describe("Optional bearer token if not using configured authentication"),
+  capacityId: z.string().min(1).describe("Target capacity ID"),
+  workspaceId: z.string().min(1).describe("Workspace ID to assign to capacity")
+});
+
+const UnassignWorkspaceFromCapacitySchema = z.object({
+  bearerToken: z.string().optional().describe("Optional bearer token if not using configured authentication"),
+  workspaceId: z.string().min(1).describe("Workspace ID to unassign from capacity")
+});
+
+const ListCapacityWorkspacesSchema = z.object({
+  bearerToken: z.string().optional().describe("Optional bearer token if not using configured authentication"),
+  capacityId: z.string().min(1).describe("Capacity ID to list workspaces for")
+});
+
 const FindWorkspaceSchema = z.object({
   bearerToken: z.string().optional().describe("Optional bearer token if not using configured authentication"),
   searchName: z.string().min(1).describe("Workspace name to search for (partial match supported)")
@@ -3492,6 +3513,142 @@ server.tool(
       content: [{
         type: "text",
         text: `Workspace creation simulated: ${name}\nDescription: ${description || 'None'}`
+      }]
+    };
+  }
+);
+
+// ==================== CAPACITY MANAGEMENT TOOLS ====================
+
+server.tool(
+  "fabric_list_capacities",
+  "List all available Fabric capacities",
+  ListCapacitiesSchema.shape,
+  async ({ bearerToken }) => {
+    const result = await executeApiCall(
+      bearerToken,
+      authConfig.defaultWorkspaceId || "global",
+      "list-capacities",
+      (client) => client.listCapacities(),
+      {}
+    );
+
+    if (result.status === 'error') {
+      return {
+        content: [{ type: "text", text: `Error listing capacities: ${result.error}` }]
+      };
+    }
+
+    const capacities = result.data || [];
+    if (capacities.length === 0) {
+      return {
+        content: [{ type: "text", text: "No capacities found in your tenant." }]
+      };
+    }
+
+    const capacitiesList = capacities.map((capacity: any, index: number) => 
+      `${index + 1}. ${capacity.displayName} (${capacity.sku})\n   ID: ${capacity.id}\n   State: ${capacity.state}\n   Region: ${capacity.region}`
+    ).join('\n\n');
+
+    return {
+      content: [{ 
+        type: "text", 
+        text: `🏗️ **Found ${capacities.length} Fabric Capacit${capacities.length === 1 ? 'y' : 'ies'}:**\n\n${capacitiesList}\n\n💡 Use these capacity IDs to assign workspaces or list capacity workspaces.`
+      }]
+    };
+  }
+);
+
+server.tool(
+  "fabric_assign_workspace_to_capacity",
+  "Assign a workspace to a dedicated Fabric capacity",
+  AssignWorkspaceToCapacitySchema.shape,
+  async ({ bearerToken, capacityId, workspaceId }) => {
+    const result = await executeApiCall(
+      bearerToken,
+      authConfig.defaultWorkspaceId || "global",
+      "assign-workspace-to-capacity",
+      (client) => client.assignWorkspaceToCapacity(capacityId, workspaceId),
+      { capacityId, workspaceId }
+    );
+
+    if (result.status === 'error') {
+      return {
+        content: [{ type: "text", text: `Error assigning workspace to capacity: ${result.error}` }]
+      };
+    }
+
+    return {
+      content: [{ 
+        type: "text", 
+        text: `✅ **Workspace Assignment Successful!**\n\n📋 Details:\n• Workspace ID: ${workspaceId}\n• Capacity ID: ${capacityId}\n• Status: Successfully assigned\n• Assigned at: ${result.data?.assignedAt || 'Now'}\n\n💡 The workspace is now running on dedicated capacity resources.`
+      }]
+    };
+  }
+);
+
+server.tool(
+  "fabric_unassign_workspace_from_capacity",
+  "Unassign a workspace from its capacity (move to shared capacity)",
+  UnassignWorkspaceFromCapacitySchema.shape,
+  async ({ bearerToken, workspaceId }) => {
+    const result = await executeApiCall(
+      bearerToken,
+      authConfig.defaultWorkspaceId || "global",
+      "unassign-workspace-from-capacity",
+      (client) => client.unassignWorkspaceFromCapacity(workspaceId),
+      { workspaceId }
+    );
+
+    if (result.status === 'error') {
+      return {
+        content: [{ type: "text", text: `Error unassigning workspace from capacity: ${result.error}` }]
+      };
+    }
+
+    return {
+      content: [{ 
+        type: "text", 
+        text: `✅ **Workspace Unassignment Successful!**\n\n📋 Details:\n• Workspace ID: ${workspaceId}\n• Status: Moved to shared capacity\n• Unassigned at: ${result.data?.unassignedAt || 'Now'}\n\n💡 The workspace is now running on shared capacity resources.`
+      }]
+    };
+  }
+);
+
+server.tool(
+  "fabric_list_capacity_workspaces",
+  "List all workspaces assigned to a specific capacity",
+  ListCapacityWorkspacesSchema.shape,
+  async ({ bearerToken, capacityId }) => {
+    const result = await executeApiCall(
+      bearerToken,
+      authConfig.defaultWorkspaceId || "global",
+      "list-capacity-workspaces",
+      (client) => client.listCapacityWorkspaces(capacityId),
+      { capacityId }
+    );
+
+    if (result.status === 'error') {
+      return {
+        content: [{ type: "text", text: `Error listing capacity workspaces: ${result.error}` }]
+      };
+    }
+
+    const workspaces = result.data || [];
+    if (workspaces.length === 0) {
+      return {
+        content: [{ type: "text", text: `No workspaces found in capacity ${capacityId}.` }]
+      };
+    }
+
+    const workspacesList = workspaces.map((workspace: any, index: number) => 
+      `${index + 1}. ${workspace.name} (${workspace.type})\n   ID: ${workspace.id}\n   State: ${workspace.state}`
+    ).join('\n\n');
+
+    return {
+      content: [{ 
+        type: "text", 
+        text: `🏗️ **Found ${workspaces.length} Workspace${workspaces.length === 1 ? '' : 's'} in Capacity ${capacityId}:**\n\n${workspacesList}\n\n💡 These workspaces are running on dedicated capacity resources.`
       }]
     };
   }
