@@ -1,0 +1,23 @@
+{
+  "github.copilot.mcp.servers": {
+    "fabric-analytics": {
+      "command": "node",
+      "args": [
+        "C:\\Users\\saravi\\Fabric-Analytics-MCP\\build\\index.js"
+      ],
+      "cwd": "C:\\Users\\saravi\\Fabric-Analytics-MCP",
+      "env": {
+        "FABRIC_AUTH_METHOD": "azure-cli",
+        "NODE_ENV": "production"
+      }
+    }
+  },
+  "github.copilot.enable": {
+    "*": true,
+    "plaintext": true,
+    "markdown": true,
+    "json": true,
+    "typescript": true,
+    "javascript": true
+  }
+}

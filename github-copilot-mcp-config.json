@@ -1,0 +1,29 @@
+{
+  "description": "GitHub Copilot MCP configuration for Fabric Analytics Server",
+  "vscode_settings": {
+    "github.copilot.mcp.servers": {
+      "fabric-analytics": {
+        "command": "node",
+        "args": [
+          "C:\\Users\\saravi\\Fabric-Analytics-MCP\\build\\index.js"
+        ],
+        "cwd": "C:\\Users\\saravi\\Fabric-Analytics-MCP",
+        "env": {
+          "NODE_ENV": "production",
+          "FABRIC_AUTH_METHOD": "azure-cli"
+        }
+      }
+    }
+  },
+  "usage_instructions": {
+    "setup": "Add the 'github.copilot.mcp.servers' section to your VS Code settings.json",
+    "authentication": "Ensure you're logged into Azure CLI with 'az login'",
+    "test_workspace": "c22f6805-d84a-4143-80b2-0c9e9832e5a2",
+    "example_prompts": [
+      "List all items in my Fabric workspace c22f6805-d84a-4143-80b2-0c9e9832e5a2",
+      "Show me the latest job runs from my workspace",
+      "Create a new notebook in the workspace",
+      "Start a Spark session for data analysis"
+    ]
+  }
+}
