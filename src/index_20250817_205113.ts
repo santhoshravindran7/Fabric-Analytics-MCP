@@ -387,19 +387,19 @@ const LivySessionSchema = BaseWorkspaceSchema.extend({
 
 const LivySessionOperationSchema = BaseWorkspaceSchema.extend({
   lakehouseId: z.string().min(1).describe("Lakehouse ID"),
-  sessionId: z.string().min(1).describe("Livy session ID (UUID)")
+  sessionId: z.number().min(0).describe("Livy session ID")
 });
 
 const LivyStatementSchema = BaseWorkspaceSchema.extend({
   lakehouseId: z.string().min(1).describe("Lakehouse ID"),
-  sessionId: z.string().min(1).describe("Livy session ID (UUID)"),
+  sessionId: z.number().min(0).describe("Livy session ID"),
   code: z.string().min(1).describe("Code to execute"),
   kind: z.enum(["spark", "pyspark", "sparkr", "sql"]).optional().describe("Statement kind")
 });
 
 const LivyStatementOperationSchema = BaseWorkspaceSchema.extend({
   lakehouseId: z.string().min(1).describe("Lakehouse ID"),
-  sessionId: z.string().min(1).describe("Livy session ID (UUID)"),
+  sessionId: z.number().min(0).describe("Livy session ID"),
   statementId: z.number().min(0).describe("Statement ID")
 });
 
@@ -468,14 +468,14 @@ const SparkDashboardSchema = BaseWorkspaceSchema.extend({
 // Enhanced Livy Log Analysis Schemas
 const LivySessionLogAnalysisSchema = BaseWorkspaceSchema.extend({
   lakehouseId: z.string().min(1).describe("Lakehouse ID"),
-  sessionId: z.string().min(1).describe("Livy session ID (UUID string)"),
+  sessionId: z.number().min(0).describe("Livy session ID"),
   analysisType: z.enum(["summary", "detailed", "performance", "errors", "recommendations"]).default("detailed").describe("Type of log analysis to perform"),
   useLLM: z.boolean().default(true).describe("Use LLM for intelligent log analysis")
 });
 
 const LivyStatementLogAnalysisSchema = BaseWorkspaceSchema.extend({
   lakehouseId: z.string().min(1).describe("Lakehouse ID"), 
-  sessionId: z.string().min(1).describe("Livy session ID (UUID string)"),
+  sessionId: z.number().min(0).describe("Livy session ID"),
   statementId: z.number().min(0).describe("Statement ID to analyze"),
   analysisType: z.enum(["performance", "errors", "optimization", "comprehensive"]).default("comprehensive").describe("Type of analysis to perform"),
   includeRecommendations: z.boolean().default(true).describe("Include optimization recommendations")
@@ -483,7 +483,7 @@ const LivyStatementLogAnalysisSchema = BaseWorkspaceSchema.extend({
 
 const LivyExecutionHistorySchema = BaseWorkspaceSchema.extend({
   lakehouseId: z.string().min(1).describe("Lakehouse ID"),
-  sessionId: z.string().min(1).optional().describe("Optional specific session ID to analyze (UUID string)"),
+  sessionId: z.number().min(0).optional().describe("Optional specific session ID to analyze"),
   timeRange: z.enum(["1h", "6h", "24h", "7d", "30d"]).default("24h").describe("Time range for history analysis"),
   analysisType: z.enum(["performance_trends", "error_patterns", "resource_usage", "comprehensive"]).default("comprehensive").describe("Type of historical analysis")
 });
@@ -612,12 +612,6 @@ const AnalyzeFabricRunPerformanceSchema = BaseWorkspaceSchema.extend({
   itemId: z.string().min(1).describe("Item ID"),
   jobInstanceId: z.string().min(1).describe("Job instance ID to analyze"),
   analysisType: z.enum(["performance", "errors", "bottlenecks", "comprehensive"]).default("comprehensive").describe("Type of analysis to perform")
-});
-
-const GetFabricCapacitySchedulesSchema = BaseWorkspaceSchema.extend({
-  capacityId: z.string().optional().describe("Optional Fabric capacity ID to scan (if not provided, scans all accessible workspaces)"),
-  includeCompleted: z.boolean().default(false).describe("Include items with only completed runs"),
-  scheduleType: z.enum(["all", "notebooks", "dataflows", "pipelines", "sparkjobs"]).default("all").describe("Type of scheduled items to retrieve")
 });
 
 // ====================================
@@ -844,44 +838,6 @@ function generatePerformanceRecommendations(run: FabricRun, subactivities: Fabri
   
   return recommendations;
 }
-
-// Add these helper functions after your existing helpers
-function getItemStatus(run: any): string {
-  if (!run) return 'paused';
-  
-  const status = run.status?.toLowerCase() || '';
-  
-  if (['inprogress', 'running', 'started'].includes(status)) return 'running';
-  if (['completed', 'succeeded', 'success'].includes(status)) return 'completed';
-  if (['failed', 'error', 'faulted'].includes(status)) return 'failed';
-  if (['scheduled', 'pending', 'queued'].includes(status)) return 'scheduled';
-  
-  return 'paused';
-}
-
-function getNextRunTime(runs: any[], status: string): string | null {
-  // This is a simplified approach - in reality you'd need to check actual schedules
-  if (status === 'scheduled' && runs.length > 0) {
-    const latestRun = runs[0];
-    if (latestRun.scheduledStartTime) {
-      return latestRun.scheduledStartTime;
-    }
-  }
-  return null;
-}
-
-function calculateDurationMinutes(run: any): number | null {
-  if (!run?.startTime || !run?.endTime) return null;
-  
-  try {
-    const start = new Date(run.startTime).getTime();
-    const end = new Date(run.endTime).getTime();
-    return Math.round((end - start) / (1000 * 60)); // Duration in minutes
-  } catch {
-    return null;
-  }
-}
-
 // ====================================
 // HELPER INTERFACES AND TYPES
 // ====================================
@@ -1174,7 +1130,7 @@ async function executeApiCall<T>(
     // Try direct Azure CLI command execution since auth client might fail in isolated process
     try {
       const { execSync } = require('child_process');
-      const command = 'az account get-access-token --resource "https://api.fabric.microsoft.com" --query "accessToken" --output tsv';
+      const command = 'az account get-access-token --resource "https://analysis.windows.net/powerbi/api" --query "accessToken" --output tsv';
       const directToken = execSync(command, { 
         encoding: 'utf8',
         timeout: 30000, // 30 second timeout
@@ -1203,7 +1159,7 @@ async function executeApiCall<T>(
 Troubleshooting steps:
 1. Ensure Azure CLI is installed and in PATH
 2. Run 'az login' in your terminal
-3. Verify token with: az account get-access-token --resource "https://api.fabric.microsoft.com"
+3. Verify token with: az account get-access-token --resource "https://analysis.windows.net/powerbi/api"
 4. Restart VS Code to refresh the MCP server process
 5. Alternative: Use bearerToken with actual token value instead of "azure_cli"`
         };
@@ -2183,7 +2139,7 @@ ${JSON.stringify(dashboard.applications, null, 2)}
 // ==================== LLM-POWERED ANALYSIS HELPERS ====================
 
 interface SessionInfo {
-  id: string; // UUID returned by Fabric API
+  id: number;
   state: string;
   kind: string;
   appInfo?: Record<string, unknown>;
@@ -5040,7 +4996,7 @@ server.tool(
                 });
 
                 // Collect recent failures
-                dashboard.recentFailures.push(...itemMetrics.recentFailures.map((run: any) => ({
+                dashboard.recentFailures.push(...itemMetrics.recentFailures.map(run => ({
                   ...run,
                   itemName: item.displayName,
                   itemType: item.type
@@ -5409,322 +5365,6 @@ Usage Examples:
 The tools integrate seamlessly with your existing authentication and error handling patterns.
 
 */
-
-// Add this function before the main() function
-async function getFabricCapacitySchedules(
-  bearerToken: string,
-  workspaceId: string,
-  capacityId?: string,
-  includeCompleted: boolean = false,
-  scheduleType: 'all' | 'notebooks' | 'dataflows' | 'pipelines' | 'sparkjobs' = 'all'
-) {
-  const baseUrl = 'https://api.fabric.microsoft.com/v1';
-  
-  const headers = {
-    'Authorization': `Bearer ${bearerToken}`,
-    'Content-Type': 'application/json'
-  };
-
-  try {
-    const schedules: any[] = [];
-    let workspaces: any[] = [];
-
-    // Get workspaces to scan
-    if (workspaceId && workspaceId !== 'global') {
-      const wsResponse = await fetch(`${baseUrl}/workspaces/${workspaceId}`, { headers });
-      if (wsResponse.ok) {
-        workspaces = [await wsResponse.json()];
-      }
-    } else if (capacityId) {
-      const capacityResponse = await fetch(`${baseUrl}/capacities/${capacityId}/workspaces`, { headers });
-      if (capacityResponse.ok) {
-        const data = await capacityResponse.json();
-        workspaces = data.value || [];
-      }
-    } else {
-      // Get all accessible workspaces
-      const wsResponse = await fetch(`${baseUrl}/workspaces`, { headers });
-      if (wsResponse.ok) {
-        const data = await wsResponse.json();
-        workspaces = data.value || [];
-      }
-    }
-
-    // Scan each workspace for scheduled items
-    for (const workspace of workspaces) {
-      const wsId = workspace.id;
-      const wsName = workspace.displayName || workspace.name;
-
-      // Get Notebooks and their runs
-      if (scheduleType === 'all' || scheduleType === 'notebooks') {
-        try {
-          const notebooksResponse = await fetch(`${baseUrl}/workspaces/${wsId}/notebooks`, { headers });
-          if (notebooksResponse.ok) {
-            const notebooksData = await notebooksResponse.json();
-            const notebooks = notebooksData.value || [];
-
-            for (const notebook of notebooks) {
-              try {
-                // Get notebook runs to determine if it's scheduled/active
-                const runsResponse = await fetch(`${baseUrl}/workspaces/${wsId}/items/${notebook.id}/jobs/instances?$top=10`, { headers });
-                if (runsResponse.ok) {
-                  const runsData = await runsResponse.json();
-                  const runs = runsData.value || [];
-                  
-                  if (runs.length > 0 || includeCompleted) {
-                    const latestRun = runs[0];
-                    const status = getItemStatus(latestRun);
-                    
-                    if (includeCompleted || ['running', 'scheduled'].includes(status)) {
-                      schedules.push({
-                        id: notebook.id,
-                        name: notebook.displayName,
-                        type: 'Notebook',
-                        workspaceId: wsId,
-                        workspaceName: wsName,
-                        status: status,
-                        lastRun: latestRun?.startTime || null,
-                        nextRun: getNextRunTime(runs, status),
-                        duration: calculateDurationMinutes(latestRun),
-                        runsCount: runs.length,
-                        recentRuns: runs.slice(0, 5).map((run: any) => ({
-                          id: run.id,
-                          status: run.status,
-                          startTime: run.startTime,
-                          endTime: run.endTime
-                        }))
-                      });
-                    }
-                  }
-                }
-              } catch (error) {
-                console.warn(`Error getting runs for notebook ${notebook.id}:`, error);
-              }
-            }
-          }
-        } catch (error) {
-          console.warn(`Error getting notebooks for workspace ${wsId}:`, error);
-        }
-      }
-
-      // Get Dataflows
-      if (scheduleType === 'all' || scheduleType === 'dataflows') {
-        try {
-          const dataflowsResponse = await fetch(`${baseUrl}/workspaces/${wsId}/dataflows`, { headers });
-          if (dataflowsResponse.ok) {
-            const dataflowsData = await dataflowsResponse.json();
-            const dataflows = dataflowsData.value || [];
-
-            for (const dataflow of dataflows) {
-              try {
-                // Get dataflow runs (using items API since dataflows are items)
-                const runsResponse = await fetch(`${baseUrl}/workspaces/${wsId}/items/${dataflow.id}/jobs/instances?$top=10`, { headers });
-                if (runsResponse.ok) {
-                  const runsData = await runsResponse.json();
-                  const runs = runsData.value || [];
-                  
-                  if (runs.length > 0 || includeCompleted) {
-                    const latestRun = runs[0];
-                    const status = getItemStatus(latestRun);
-                    
-                    if (includeCompleted || ['running', 'scheduled'].includes(status)) {
-                      schedules.push({
-                        id: dataflow.id,
-                        name: dataflow.displayName || dataflow.name,
-                        type: 'Dataflow',
-                        workspaceId: wsId,
-                        workspaceName: wsName,
-                        status: status,
-                        lastRun: latestRun?.startTime || null,
-                        nextRun: getNextRunTime(runs, status),
-                        duration: calculateDurationMinutes(latestRun),
-                        runsCount: runs.length,
-                        recentRuns: runs.slice(0, 5).map((run: any) => ({
-                          id: run.id,
-                          status: run.status,
-                          startTime: run.startTime,
-                          endTime: run.endTime
-                        }))
-                      });
-                    }
-                  }
-                }
-              } catch (error) {
-                console.warn(`Error getting runs for dataflow ${dataflow.id}:`, error);
-              }
-            }
-          }
-        } catch (error) {
-          console.warn(`Error getting dataflows for workspace ${wsId}:`, error);
-        }
-      }
-
-      // Get Spark Job Definitions
-      if (scheduleType === 'all' || scheduleType === 'sparkjobs') {
-        try {
-          const itemsResponse = await fetch(`${baseUrl}/workspaces/${wsId}/items?type=SparkJobDefinition`, { headers });
-          if (itemsResponse.ok) {
-            const itemsData = await itemsResponse.json();
-            const sparkJobs = itemsData.value || [];
-
-            for (const sparkJob of sparkJobs) {
-              try {
-                // Get spark job runs using the item runs endpoint
-                const runsResponse = await fetch(`${baseUrl}/workspaces/${wsId}/items/${sparkJob.id}/jobs/instances?$top=10`, { headers });
-                if (runsResponse.ok) {
-                  const runsData = await runsResponse.json();
-                  const runs = runsData.value || [];
-                  
-                  if (runs.length > 0 || includeCompleted) {
-                    const latestRun = runs[0];
-                    const status = getItemStatus(latestRun);
-                    
-                    if (includeCompleted || ['running', 'scheduled'].includes(status)) {
-                      schedules.push({
-                        id: sparkJob.id,
-                        name: sparkJob.displayName,
-                        type: 'Spark Job',
-                        workspaceId: wsId,
-                        workspaceName: wsName,
-                        status: status,
-                        lastRun: latestRun?.startTime || null,
-                        nextRun: getNextRunTime(runs, status),
-                        duration: calculateDurationMinutes(latestRun),
-                        runsCount: runs.length,
-                        recentRuns: runs.slice(0, 5).map((run: any) => ({
-                          id: run.id,
-                          status: run.status,
-                          startTime: run.startTime,
-                          endTime: run.endTime
-                        }))
-                      });
-                    }
-                  }
-                }
-              } catch (error) {
-                console.warn(`Error getting runs for spark job ${sparkJob.id}:`, error);
-              }
-            }
-          }
-        } catch (error) {
-          console.warn(`Error getting spark jobs for workspace ${wsId}:`, error);
-        }
-      }
-    }
-
-    // Sort schedules by status priority and last run time
-    schedules.sort((a, b) => {
-      const statusPriority = { 'running': 0, 'scheduled': 1, 'completed': 2, 'failed': 3, 'paused': 4 };
-      const aPriority = statusPriority[a.status as keyof typeof statusPriority] ?? 5;
-      const bPriority = statusPriority[b.status as keyof typeof statusPriority] ?? 5;
-      
-      if (aPriority !== bPriority) {
-        return aPriority - bPriority;
-      }
-      
-      // Secondary sort by last run time (newest first)
-      if (a.lastRun && b.lastRun) {
-        return new Date(b.lastRun).getTime() - new Date(a.lastRun).getTime();
-      }
-      
-      return a.name.localeCompare(b.name);
-    });
-
-    // Generate summary statistics
-    const summary = {
-      totalItems: schedules.length,
-      byStatus: schedules.reduce((acc, item) => {
-        acc[item.status] = (acc[item.status] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>),
-      byType: schedules.reduce((acc, item) => {
-        acc[item.type] = (acc[item.type] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>),
-      byWorkspace: schedules.reduce((acc, item) => {
-        acc[item.workspaceName] = (acc[item.workspaceName] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>)
-    };
-
-    return {
-      success: true,
-      summary,
-      schedules,
-      scannedWorkspaces: workspaces.length,
-      timestamp: new Date().toISOString()
-    };
-
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : String(error),
-      timestamp: new Date().toISOString()
-    };
-  }
-}
-
-// Add this server tool after your existing tools
-server.tool(
-  "get-fabric-capacity-schedules",
-  "Get schedules and running status of all items across a Fabric capacity or workspace",
-  GetFabricCapacitySchedulesSchema.shape,
-  async ({ bearerToken, workspaceId, capacityId, includeCompleted, scheduleType }) => {
-    const result = await getFabricCapacitySchedules(
-      bearerToken,
-      workspaceId,
-      capacityId,
-      includeCompleted ?? false,
-      scheduleType ?? 'all'
-    );
-    
-    if (result.success) {
-      const output = `🏭 **Fabric Capacity Schedules**
-
-**Scanned Workspaces:** ${result.scannedWorkspaces}
-**Total Items:** ${result.summary?.totalItems || 0}
-**Schedule Type:** ${scheduleType || 'all'}
-**Include Completed:** ${includeCompleted ? 'Yes' : 'No'}
-**Generated:** ${new Date(result.timestamp).toLocaleString()}
-
-## Summary by Status:
-${result.summary ? Object.entries(result.summary.byStatus).map(([status, count]) => `- ${status}: ${count}`).join('\n') : 'No data'}
-
-## Summary by Type:
-${result.summary ? Object.entries(result.summary.byType).map(([type, count]) => `- ${type}: ${count}`).join('\n') : 'No data'}
-
-## Summary by Workspace:
-${result.summary ? Object.entries(result.summary.byWorkspace).map(([workspace, count]) => `- ${workspace}: ${count}`).join('\n') : 'No data'}
-
-## Schedules:
-# Schedules:
-${result.schedules ? result.schedules.map((schedule: any, index: number) => {
-  const statusIcon = schedule.status === 'running' ? '🟢' : 
-                    schedule.status === 'scheduled' ? '🟡' : 
-                    schedule.status === 'completed' ? '✅' : 
-                    schedule.status === 'failed' ? '❌' : '⚪';
-  
-  return `${index + 1}. ${statusIcon} **${schedule.name}** (${schedule.type})
-   Workspace: ${schedule.workspaceName}
-   Status: ${schedule.status}
-   Last Run: ${schedule.lastRun ? new Date(schedule.lastRun).toLocaleString() : 'N/A'}
-   Duration: ${schedule.duration ? `${schedule.duration} min` : 'N/A'}
-   Total Runs: ${schedule.runsCount}`;
-}).join('\n\n') : 'No schedules found'}
-
-📊 Use this data to monitor your Fabric capacity's workload and identify optimization opportunities.`;
-
-      return {
-        content: [{ type: "text", text: output }]
-      };
-    } else {
-      return {
-        content: [{ type: "text", text: `❌ Error: ${result.error}` }],
-        isError: true
-      };
-    }
-  }
-);
 
 async function main() {
   // Start health server for Docker/Kubernetes deployments
