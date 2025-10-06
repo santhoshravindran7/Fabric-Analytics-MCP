@@ -892,30 +892,7 @@ $env:FABRIC_AUTH_METHOD="azure_cli"; npm start
 
 > 💡 **Pro Tip**: Azure CLI authentication is perfect for developers who want to quickly test the MCP server without complex Azure AD app setup. Just `az login` and you're ready to go!
 
-#### **� Azure CLI Troubleshooting**
-
-**❌ "InsufficientScopes" Error (FIXED)**
-If you're getting `HTTP 403: InsufficientScopes` errors:
-
-✅ **Solution**: This has been fixed in the latest version. The MCP server now uses the correct Microsoft Fabric API scope:
-- **Correct**: `https://api.fabric.microsoft.com`
-- **Old (Fixed)**: `https://analysis.windows.net/powerbi/api`
-
-**Steps to Fix**:
-1. **Update to latest version** of the MCP server
-2. **Restart** the MCP server process
-3. **Verify** you have Microsoft Fabric access (not just Power BI)
-4. **Test** with: `az account get-access-token --resource "https://api.fabric.microsoft.com"`
-
-**Still Having Issues?**
-- ✅ Check you're logged into the correct Azure tenant
-- ✅ Verify your account has Microsoft Fabric permissions
-- ✅ Ensure you have access to the specific Fabric workspace
-- ✅ Run the validation test: `node test-fabric-auth-fix.cjs`
-
-> 📋 **Quick Validation**: Run `az account get-access-token --resource "https://api.fabric.microsoft.com"` - if this works, Azure CLI authentication should work with the MCP server.
-
-#### **�🔧 Complete Authentication Setup**
+#### **🔧 Complete Authentication Setup**
 
 📚 **Detailed Guides**:
 - **[Authentication Setup Guide](AUTHENTICATION_SETUP.md)** - Complete Azure AD setup
@@ -1351,6 +1328,3 @@ For issues and questions:
 - **Anthropic** for the Model Context Protocol specification
 
 *This project began as my weekend hack project exploring AI integration with Microsoft Fabric. During a casual conversation with Chris and Bogdan about making AI tooling more accessible. What started as a personal experiment over a weekend is now available for everyone to build upon.*
-
-
-[![Verified on MSeeP](https://mseep.ai/badge.svg)](https://mseep.ai/app/5232d59b-7079-451e-95d3-cce79b2e60f4)
