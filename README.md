@@ -51,7 +51,8 @@ A comprehensive Model Context Protocol (MCP) server that provides analytics capa
 - **☸️ Enterprise Deployment** - Full Kubernetes and Azure deployment support with auto-scaling
 - **🔄 Docker Support** - Containerized deployment with health checks and monitoring
 - **📊 Monitoring & Observability** - Built-in Prometheus metrics and Grafana dashboards
-- **🎯 48 Total Tools** - Comprehensive coverage of Fabric operations (up from 31 tools)
+- **🔀 Synapse to Fabric Migration** - Automated migration of Spark notebooks from Azure Synapse Analytics
+- **🎯 52 Total Tools** - Comprehensive coverage of Fabric operations including migration (up from 48 tools)
 
 ## 🏗️ **New Workspace Management Features**
 
@@ -135,6 +136,69 @@ The MCP server now includes **21 new workspace management tools** that enable co
 # List all workspaces and their Git integration status
 # Set up a complete analytics environment with lakehouse and notebooks
 ```
+
+## 🔀 **Synapse to Fabric Migration Tools**
+
+### **🆕 Automated Spark Workload Migration**
+
+The MCP server now includes **4 specialized migration tools** that automate the migration of Spark notebooks and pipelines from Azure Synapse Analytics to Microsoft Fabric:
+
+### **🔍 Migration Discovery Tools**
+- **fabric_list_synapse_workspaces** - List all Synapse workspaces in your Azure subscription
+- **fabric_discover_synapse_workspace** - Inventory notebooks, pipelines, linked services, and Spark jobs from Synapse
+
+### **🔄 Transformation & Migration Tools**
+- **fabric_transform_notebooks** - Transform Synapse notebooks to Fabric format (mssparkutils → notebookutils)
+- **fabric_migrate_synapse_to_fabric** - Complete end-to-end migration with discovery, transformation, and provisioning
+
+### **✨ Key Migration Features**
+
+- **Automatic Code Transformation** - Converts Synapse-specific code to Fabric equivalents:
+  - `mssparkutils` → `notebookutils`
+  - Synapse magic commands → Fabric magic commands
+  - ABFSS path rewriting to OneLake
+  - Spark pool configuration cleanup
+  
+- **Comprehensive Asset Discovery** - Inventories all migrat assets:
+  - Jupyter notebooks (ipynb format)
+  - Data pipelines and workflows
+  - Linked services and connections
+  - Spark job definitions
+
+- **Safe Testing with Dry Run** - Preview all changes before applying:
+  - Test transformations without provisioning
+  - Validate transformed code
+  - Review change reports
+
+- **End-to-End Automation** - Complete migration pipeline:
+  - Discovery → Transformation → Provisioning → Validation
+  - Automatic lakehouse creation
+  - OneLake shortcut provisioning
+  - Comprehensive migration reports
+
+### **🎯 Migration Scenarios**
+
+**📋 Explore Before Migrating:**
+```
+"List all my Synapse workspaces and show me what notebooks are in workspace 'analytics-synapse'"
+```
+
+**🔄 Preview Transformations:**
+```
+"Discover assets from my Synapse workspace 'analytics-synapse' and show me how the code would be transformed (dry run)"
+```
+
+**🚀 Complete Migration:**
+```
+"Migrate all notebooks from Synapse workspace 'analytics-synapse' to Fabric workspace 'abcd-1234' and create a lakehouse called 'MigratedData'"
+```
+
+**📊 Detailed Migration Guide:**
+See [MIGRATION.md](./MIGRATION.md) for comprehensive migration documentation including:
+- Step-by-step workflows
+- Transformation rule details
+- Best practices and troubleshooting
+- Complete examples
 
 ### **🎯 End-to-End Testing with Real Workspaces**
 

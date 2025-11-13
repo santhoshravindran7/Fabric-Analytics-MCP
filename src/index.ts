@@ -8,6 +8,24 @@ import { SimulationService } from './simulation-service.js';
 import { MicrosoftAuthClient, AuthMethod, AuthResult } from './auth-client.js';
 import http from 'http';
 import url from 'url';
+// Migration tools
+import { 
+  migrationTools,
+  ListSynapseWorkspacesSchema,
+  DiscoverSynapseWorkspaceSchema,
+  TransformNotebooksSchema,
+  MigrateSynapseToFabricSchema,
+  CreateFabricLakehouseSchema,
+  ProvisionNotebooksSchema,
+  ListFabricCapacitiesSchema,
+  AssignCapacityToWorkspaceSchema,
+  GetSynapseSparkPoolsSchema,
+  CreateFabricSparkPoolsSchema,
+  SynapseWorkspaceDetailsSchema,
+  SynapseComputeSpendSchema,
+  MigrateSparkPoolsToFabricSchema,
+  RecommendFabricCapacitySchema
+} from './migration/mcp-tools.js';
 /**
  * STDOUT SAFETY GUARD
  * -------------------------------------------------------------
@@ -1369,6 +1387,684 @@ server.tool(
     return {
       content: [{ type: 'text', text: `🏗️ Workspaces in Capacity ${capacityId} (${workspaces.length}):\n\n${list}` }]
     };
+  }
+);
+
+// ====================================
+// SYNAPSE TO FABRIC MIGRATION TOOLS
+// ====================================
+
+server.tool(
+  "fabric_list_synapse_workspaces",
+  ListSynapseWorkspacesSchema.shape,
+  {
+    title: "List Synapse Workspaces",
+    description: "List all Azure Synapse Analytics workspaces in your Azure subscription. Returns workspace names, IDs, locations, and resource groups to help you identify workspaces for migration."
+  },
+  async (params) => {
+    try {
+      console.error(`🔍 Listing Synapse workspaces...`);
+      const result = await migrationTools.fabric_list_synapse_workspaces.handler(params);
+      
+      if (result.count === 0) {
+        return {
+          content: [{ type: 'text', text: '📭 No Synapse workspaces found in your subscription.' }]
+        };
+      }
+
+      let output = `# 🏢 Azure Synapse Analytics Workspaces\n\n`;
+      output += `**Found:** ${result.count} workspaces\n\n`;
+      
+      result.workspaces.forEach((ws: any, idx: number) => {
+        output += `## ${idx + 1}. ${ws.name}\n`;
+        output += `- **Location:** ${ws.location}\n`;
+        output += `- **Resource Group:** ${ws.resourceGroup}\n`;
+        output += `- **Resource ID:** \`${ws.id}\`\n`;
+        if (ws.managedResourceGroupName) {
+          output += `- **Managed RG:** ${ws.managedResourceGroupName}\n`;
+        }
+        output += `\n`;
+      });
+
+      output += `\n💡 **Next Steps:**\n`;
+      output += `1. Use \`fabric_discover_synapse_workspace\` to inventory assets from a workspace\n`;
+      output += `2. Provide workspaceName and resourceGroup from above\n`;
+
+      return {
+        content: [{ type: 'text', text: output }]
+      };
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      return {
+        content: [{ type: 'text', text: `❌ Error listing Synapse workspaces:\n${errorMsg}` }],
+        isError: true
+      };
+    }
+  }
+);
+
+server.tool(
+  "fabric_discover_synapse_workspace",
+  DiscoverSynapseWorkspaceSchema.shape,
+  {
+    title: "Discover Synapse Workspace",
+    description: "Discover and inventory all assets from an Azure Synapse Analytics workspace including notebooks, pipelines, linked services, and Spark job definitions. Returns detailed inventory for migration planning."
+  },
+  async (params: any) => {
+    try {
+      console.error(`🔍 Discovering assets from Synapse workspace: ${params.workspaceName}`);
+      const result = await migrationTools.fabric_discover_synapse_workspace.handler(params);
+
+      let output = `# 📋 Synapse Workspace Discovery Report\n\n`;
+      output += `**Workspace:** ${result.source.workspaceName}\n`;
+      output += `**Resource Group:** ${result.source.resourceGroup}\n`;
+      output += `**Discovered:** ${new Date(result.discoveredAt).toLocaleString()}\n\n`;
+
+      output += `## 📊 Asset Summary\n\n`;
+      output += `| Asset Type | Count |\n`;
+      output += `|------------|-------|\n`;
+      output += `| 📓 Notebooks | ${result.summary.notebooks} |\n`;
+      output += `| 🔄 Pipelines | ${result.summary.pipelines} |\n`;
+      output += `| 🔗 Linked Services | ${result.summary.linkedServices} |\n`;
+      output += `| ⚡ Spark Jobs | ${result.summary.sparkJobs} |\n`;
+      output += `| **Total** | **${result.summary.notebooks + result.summary.pipelines + result.summary.linkedServices + result.summary.sparkJobs}** |\n\n`;
+
+      if (result.notebooks.length > 0) {
+        output += `## 📓 Notebooks (${result.notebooks.length})\n\n`;
+        result.notebooks.forEach((nb: any, idx: number) => {
+          output += `${idx + 1}. **${nb.name}**\n`;
+          output += `   - Path: \`${nb.path}\`\n`;
+          output += `   - ID: \`${nb.id}\`\n`;
+        });
+        output += `\n`;
+      }
+
+      if (result.pipelines.length > 0) {
+        output += `## 🔄 Pipelines (${result.pipelines.length})\n\n`;
+        result.pipelines.forEach((p: any, idx: number) => {
+          output += `${idx + 1}. **${p.name}**\n`;
+          output += `   - ID: \`${p.id}\`\n`;
+        });
+        output += `\n`;
+      }
+
+      if (result.linkedServices.length > 0) {
+        output += `## 🔗 Linked Services (${result.linkedServices.length})\n\n`;
+        result.linkedServices.forEach((ls: any, idx: number) => {
+          output += `${idx + 1}. **${ls.name}** (${ls.type})\n`;
+        });
+        output += `\n`;
+      }
+
+      if (result.sparkJobs.length > 0) {
+        output += `## ⚡ Spark Job Definitions (${result.sparkJobs.length})\n\n`;
+        result.sparkJobs.forEach((sj: any, idx: number) => {
+          output += `${idx + 1}. **${sj.name}**\n`;
+          if (sj.scriptPath) {
+            output += `   - Script: \`${sj.scriptPath}\`\n`;
+          }
+        });
+        output += `\n`;
+      }
+
+      output += `\n💡 **Next Steps:**\n`;
+      output += `1. Review the discovered assets above\n`;
+      output += `2. Use \`fabric_migrate_synapse_to_fabric\` for full end-to-end migration\n`;
+      output += `3. Or use \`fabric_transform_notebooks\` to preview transformations first\n\n`;
+      
+      output += `📦 **Inventory JSON** (for transformation):\n\`\`\`\nSaved in discovery results - use this for fabric_transform_notebooks\n\`\`\`\n`;
+
+      return {
+        content: [{ type: 'text', text: output }]
+      };
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      return {
+        content: [{ type: 'text', text: `❌ Error discovering Synapse workspace:\n${errorMsg}\n\n💡 Make sure you have access to the Synapse workspace and Azure CLI is authenticated.` }],
+        isError: true
+      };
+    }
+  }
+);
+
+server.tool(
+  "fabric_transform_notebooks",
+  TransformNotebooksSchema.shape,
+  {
+    title: "Transform Notebooks",
+    description: "Transform Synapse notebooks to Fabric-compatible format. Converts mssparkutils → notebookutils, rewrites paths, and removes Synapse-specific configurations. Can run in dry-run mode to preview changes without applying them."
+  },
+  async (params: any) => {
+    try {
+      console.error(`🔄 Transforming notebooks...`);
+      const result = await migrationTools.fabric_transform_notebooks.handler(params);
+
+      let output = `# 🔄 Notebook Transformation Report\n\n`;
+      
+      if (params.dryRun) {
+        output += `⚠️ **DRY RUN MODE** - No actual changes applied\n\n`;
+      }
+
+      output += `## 📊 Summary\n\n`;
+      output += `| Metric | Count |\n`;
+      output += `|--------|-------|\n`;
+      output += `| Total Notebooks | ${result.summary.total} |\n`;
+      output += `| ✅ Successful | ${result.summary.successful} |\n`;
+      output += `| ❌ Failed | ${result.summary.failed} |\n`;
+      output += `| 📝 Total Changes | ${result.summary.totalChanges} |\n\n`;
+
+      output += `## 📓 Transformation Results\n\n`;
+      result.results.forEach((r: any, idx: number) => {
+        const status = r.success ? '✅' : '❌';
+        output += `${idx + 1}. ${status} **${r.notebookName}**\n`;
+        output += `   - Changes: ${r.changesCount}\n`;
+        if (r.errors && r.errors.length > 0) {
+          output += `   - Errors: ${r.errors.join(', ')}\n`;
+        }
+        if (r.warnings && r.warnings.length > 0) {
+          output += `   - Warnings: ${r.warnings.length}\n`;
+        }
+      });
+
+      output += `\n---\n\n`;
+      output += result.report;
+
+      output += `\n\n💡 **Next Steps:**\n`;
+      if (params.dryRun) {
+        output += `1. Review the changes above\n`;
+        output += `2. Run without dryRun to apply transformations\n`;
+        output += `3. Use \`fabric_migrate_synapse_to_fabric\` for full migration with provisioning\n`;
+      } else {
+        output += `1. Use the transformed notebooks for provisioning to Fabric\n`;
+        output += `2. Or use \`fabric_migrate_synapse_to_fabric\` for automatic provisioning\n`;
+      }
+
+      return {
+        content: [{ type: 'text', text: output }]
+      };
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      return {
+        content: [{ type: 'text', text: `❌ Error transforming notebooks:\n${errorMsg}` }],
+        isError: true
+      };
+    }
+  }
+);
+
+server.tool(
+  "fabric_migrate_synapse_to_fabric",
+  MigrateSynapseToFabricSchema.shape,
+  {
+    title: "Migrate Synapse to Fabric",
+    description: "Execute complete end-to-end migration from Azure Synapse Analytics to Microsoft Fabric. Discovers assets, transforms notebooks (mssparkutils → notebookutils), provisions to Fabric workspace, creates lakehouse if specified, and generates comprehensive migration report. Supports dry-run mode for safe testing."
+  },
+  async (params: any) => {
+    try {
+      console.error(`🚀 Starting Synapse to Fabric migration...`);
+      console.error(`   Source: ${params.synapseWorkspaceName}`);
+      console.error(`   Target: ${params.targetWorkspaceId}`);
+      
+      const result = await migrationTools.fabric_migrate_synapse_to_fabric.handler(params);
+
+      let output = `# 🚀 Synapse to Fabric Migration Report\n\n`;
+      
+      if (params.dryRun) {
+        output += `⚠️ **DRY RUN MODE** - No actual provisioning occurred\n\n`;
+      }
+
+      output += `**Status:** ${result.status === 'success' ? '✅ Success' : '⚠️ Partial Success'}\n`;
+      output += `**Generated:** ${new Date(result.generatedAt).toLocaleString()}\n\n`;
+
+      output += `## 📊 Migration Summary\n\n`;
+      output += `| Metric | Count |\n`;
+      output += `|--------|-------|\n`;
+      output += `| Total Assets | ${result.summary.totalAssets} |\n`;
+      output += `| ✅ Successful | ${result.summary.successful} |\n`;
+      output += `| ❌ Failed | ${result.summary.failed} |\n`;
+      output += `| 👀 Manual Review | ${result.summary.requiresManualReview} |\n`;
+      output += `| ⏱️ Duration | ${(result.summary.duration / 1000).toFixed(2)}s |\n\n`;
+
+      const successRate = ((result.summary.successful / result.summary.totalAssets) * 100).toFixed(1);
+      output += `**Success Rate:** ${successRate}%\n\n`;
+
+      output += `## 📦 Migration Details\n\n`;
+      output += `| Asset | Type | Status | Fabric ID | Changes |\n`;
+      output += `|-------|------|--------|-----------|----------|\n`;
+      
+      result.details.forEach((detail: any) => {
+        const statusIcon = detail.status === 'success' ? '✅' : detail.status === 'failed' ? '❌' : '👀';
+        output += `| ${detail.assetName} | ${detail.assetType} | ${statusIcon} ${detail.status} | ${detail.fabricItemId || 'N/A'} | ${detail.changesCount} |\n`;
+      });
+
+      if (result.recommendations.length > 0) {
+        output += `\n## 💡 Recommendations\n\n`;
+        result.recommendations.forEach((rec: string, idx: number) => {
+          output += `${idx + 1}. ${rec}\n`;
+        });
+      }
+
+      output += `\n---\n\n`;
+      output += result.reportMarkdown;
+
+      output += `\n\n## 🎉 Migration Complete!\n\n`;
+      if (params.dryRun) {
+        output += `This was a dry run. To execute the actual migration:\n`;
+        output += `1. Remove the dryRun parameter\n`;
+        output += `2. Run the command again\n`;
+      } else {
+        output += `Your Synapse notebooks have been migrated to Fabric!\n\n`;
+        output += `**Next Steps:**\n`;
+        output += `1. Verify the migrated notebooks in Fabric workspace\n`;
+        output += `2. Review any warnings or manual review items above\n`;
+        output += `3. Test notebook execution in Fabric environment\n`;
+        if (params.targetLakehouseName) {
+          output += `4. Configure lakehouse connections as needed\n`;
+        }
+        if (result.summary.failed > 0) {
+          output += `5. Investigate failed items and retry if needed\n`;
+        }
+      }
+
+      return {
+        content: [{ type: 'text', text: output }]
+      };
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      return {
+        content: [{ type: 'text', text: `❌ Migration failed:\n${errorMsg}\n\n💡 **Troubleshooting:**\n- Ensure Azure CLI is authenticated (\`az login\`)\n- Verify you have access to both Synapse and Fabric workspaces\n- Check that workspace IDs are correct\n- Try running in dry-run mode first to test connectivity` }],
+        isError: true
+      };
+    }
+  }
+);
+
+server.tool(
+  "fabric_create_lakehouse",
+  CreateFabricLakehouseSchema.shape,
+  {
+    title: "Create Fabric Lakehouse",
+    description: "Create a new lakehouse in a Microsoft Fabric workspace. Lakehouses provide unified storage for both structured and unstructured data with Delta Lake support."
+  },
+  async (params: any) => {
+    try {
+      console.error(`🏗️ Creating lakehouse: ${params.lakehouseName}`);
+      
+      const result = await migrationTools.fabric_create_lakehouse.handler(params);
+
+      let output = `# 🏗️ Lakehouse Created Successfully\n\n`;
+      output += `**Workspace ID:** ${result.workspaceId}\n`;
+      output += `**Lakehouse Name:** ${result.lakehouseName}\n`;
+      output += `**Lakehouse ID:** ${result.lakehouseId}\n\n`;
+      output += `## 📊 Details\n\n`;
+      output += `${result.message}\n\n`;
+      output += `**Fabric URL:** [Open Lakehouse](${result.fabricUrl})\n\n`;
+      output += `## 🎯 Next Steps\n\n`;
+      output += `1. Navigate to the lakehouse in Fabric workspace\n`;
+      output += `2. Configure data ingestion\n`;
+      output += `3. Create tables and views\n`;
+      output += `4. Associate notebooks with this lakehouse\n`;
+
+      return {
+        content: [{ type: 'text', text: output }]
+      };
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      return {
+        content: [{ type: 'text', text: `❌ Failed to create lakehouse:\n${errorMsg}\n\n💡 **Troubleshooting:**\n- Verify the workspace ID is correct\n- Ensure you have Contributor or Admin role in the workspace\n- Check that the lakehouse name is unique in the workspace` }],
+        isError: true
+      };
+    }
+  }
+);
+
+server.tool(
+  "fabric_provision_notebooks",
+  ProvisionNotebooksSchema.shape,
+  {
+    title: "Provision Notebooks to Fabric",
+    description: "Provision transformed notebooks to a Microsoft Fabric workspace. Takes transformed notebook JSON from the transform tool and creates them in the target workspace."
+  },
+  async (params: any) => {
+    try {
+      console.error(`📦 Provisioning notebooks to workspace ${params.workspaceId}`);
+      
+      const result = await migrationTools.fabric_provision_notebooks.handler(params);
+
+      let output = `# 📦 Notebooks Provisioned Successfully\n\n`;
+      output += `**Workspace ID:** ${result.workspaceId}\n`;
+      output += `**Notebooks Created:** ${result.notebooksProvisioned}\n\n`;
+      output += `## 📒 Provisioned Notebooks\n\n`;
+      output += `| Name | Fabric ID | URL |\n`;
+      output += `|------|-----------|-----|\n`;
+      
+      result.notebooks.forEach((nb: any) => {
+        output += `| ${nb.name} | ${nb.fabricId} | [Open](${nb.url}) |\n`;
+      });
+
+      output += `\n## 🎯 Next Steps\n\n`;
+      output += `1. Open each notebook in Fabric to verify content\n`;
+      output += `2. Test notebook execution\n`;
+      output += `3. Configure lakehouse or environment connections if needed\n`;
+      output += `4. Review and update any manual transformation items\n`;
+
+      return {
+        content: [{ type: 'text', text: output }]
+      };
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      return {
+        content: [{ type: 'text', text: `❌ Failed to provision notebooks:\n${errorMsg}\n\n💡 **Troubleshooting:**\n- Verify transformedNotebooksJson is valid JSON\n- Ensure workspace ID is correct\n- Check that you have Contributor or Admin role\n- Validate notebook content format is correct` }],
+        isError: true
+      };
+    }
+  }
+);
+
+// Additional migration tools for capacity and Spark pool management
+
+server.tool(
+  "fabric_list_capacities",
+  ListFabricCapacitiesSchema.shape,
+  {
+    title: "List Fabric Capacities",
+    description: "List all available Fabric capacities with Spark VCore specifications and burst capacity details. Helps with capacity planning for migrations."
+  },
+  async (params: any) => {
+    try {
+      console.error(`🏗️ Listing Fabric capacities...`);
+      const result = await migrationTools.fabric_list_capacities.handler(params);
+
+      let output = `# 🏗️ Microsoft Fabric Capacities\n\n`;
+      output += `**Total Capacities:** ${result.count}\n\n`;
+      output += `## Available Capacities\n\n`;
+      output += `| Display Name | SKU | State | Region | Spark VCores | Max (Burst) |\n`;
+      output += `|--------------|-----|-------|--------|--------------|-------------|\n`;
+
+      result.capacities.forEach((cap: any) => {
+        output += `| ${cap.displayName} | ${cap.sku} | ${cap.state} | ${cap.region} | ${cap.sparkVCores} | ${cap.maxSparkVCoresWithBurst} |\n`;
+      });
+
+      output += `\n💡 **Spark VCore Burst:**\n`;
+      output += `- F2: 4 base → 20 burst (5x)\n`;
+      output += `- F4+: Base × 3 (e.g., F4: 8 → 24, F64: 128 → 384)\n\n`;
+      output += `🎯 **Next Steps:**\n`;
+      output += `1. Use \`fabric_assign_capacity\` to assign a capacity to your workspace\n`;
+      output += `2. Consider capacity requirements for your Spark pools\n`;
+
+      return {
+        content: [{ type: 'text', text: output }]
+      };
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      return {
+        content: [{ type: 'text', text: `❌ Error listing capacities:\n${errorMsg}` }],
+        isError: true
+      };
+    }
+  }
+);
+
+server.tool(
+  "fabric_assign_capacity",
+  AssignCapacityToWorkspaceSchema.shape,
+  {
+    title: "Assign Capacity to Workspace",
+    description: "Assign a Fabric capacity to a workspace. Auto-selects the largest available capacity if not specified."
+  },
+  async (params: any) => {
+    try {
+      console.error(`🔗 Assigning capacity to workspace ${params.workspaceId}...`);
+      const result = await migrationTools.fabric_assign_capacity.handler(params);
+
+      let output = `# ✅ Capacity Assignment Complete\n\n`;
+      output += `**Workspace ID:** ${result.workspaceId}\n`;
+      output += `**Capacity ID:** ${result.capacityId}\n\n`;
+      output += `🎉 Your workspace now has a capacity assigned and can provision items like lakehouses and notebooks.\n`;
+
+      return {
+        content: [{ type: 'text', text: output }]
+      };
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      return {
+        content: [{ type: 'text', text: `❌ Failed to assign capacity:\n${errorMsg}` }],
+        isError: true
+      };
+    }
+  }
+);
+
+server.tool(
+  "fabric_get_synapse_spark_pools",
+  GetSynapseSparkPoolsSchema.shape,
+  {
+    title: "Get Synapse Spark Pools",
+    description: "Get Synapse Spark pool configurations for migration planning. Returns node sizes, counts, autoscale settings, and Spark versions."
+  },
+  async (params: any) => {
+    try {
+      console.error(`🔥 Getting Synapse Spark pools from workspace ${params.workspaceName}...`);
+      const result = await migrationTools.fabric_get_synapse_spark_pools.handler(params);
+
+      let output = `# 🔥 Synapse Spark Pools\n\n`;
+      output += `**Workspace:** ${params.workspaceName}\n`;
+      output += `**Total Pools:** ${result.count}\n\n`;
+
+      if (result.count === 0) {
+        output += `📭 No Spark pools found in this workspace.\n`;
+      } else {
+        output += `## Pool Configurations\n\n`;
+        result.pools.forEach((pool: any, idx: number) => {
+          output += `### ${idx + 1}. ${pool.name}\n`;
+          output += `- **Node Size:** ${pool.nodeSize}\n`;
+          output += `- **Node Count:** ${pool.nodeCount}\n`;
+          output += `- **Spark Version:** ${pool.sparkVersion}\n`;
+          
+          if (pool.autoScale && pool.autoScale.enabled) {
+            output += `- **AutoScale:** ${pool.autoScale.minNodeCount}-${pool.autoScale.maxNodeCount} nodes\n`;
+          }
+          
+          if (pool.autoPause && pool.autoPause.enabled) {
+            output += `- **AutoPause:** ${pool.autoPause.delayInMinutes} minutes\n`;
+          }
+          
+          output += `\n`;
+        });
+
+        output += `\n💡 **Next Steps:**\n`;
+        output += `1. Use \`fabric_create_fabric_spark_pools\` to get Fabric equivalent configurations\n`;
+        output += `2. Note: 1 Synapse VCore = 2 Fabric VCores (2:1 conversion)\n`;
+      }
+
+      return {
+        content: [{ type: 'text', text: output }]
+      };
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      return {
+        content: [{ type: 'text', text: `❌ Error getting Spark pools:\n${errorMsg}` }],
+        isError: true
+      };
+    }
+  }
+);
+
+server.tool(
+  "fabric_create_fabric_spark_pools",
+  CreateFabricSparkPoolsSchema.shape,
+  {
+    title: "Create Fabric Spark Pool Recommendations",
+    description: "Generate Fabric Spark pool recommendations from Synapse pools using 2:1 VCore conversion (1 Synapse VCore = 2 Fabric VCores)."
+  },
+  async (params: any) => {
+    try {
+      console.error(`⚙️ Generating Fabric Spark pool recommendations...`);
+      const result = await migrationTools.fabric_create_fabric_spark_pools.handler(params);
+
+      let output = `# ⚙️ Fabric Spark Pool Recommendations\n\n`;
+      output += `**Capacity SKU:** ${result.capacitySku}\n`;
+      output += `**Recommendations:** ${result.recommendations.length}\n\n`;
+
+      result.recommendations.forEach((rec: any, idx: number) => {
+        output += `## ${idx + 1}. ${rec.synapsePoolName}\n\n`;
+        output += `### Recommended Fabric Configuration\n`;
+        output += `- **Driver:** ${rec.recommendedConfig.driverCores} cores, ${rec.recommendedConfig.driverMemory}\n`;
+        output += `- **Executor:** ${rec.recommendedConfig.executorCores} cores, ${rec.recommendedConfig.executorMemory}\n`;
+        output += `- **Dynamic Allocation:** ${rec.recommendedConfig.dynamicAllocation ? 'Yes' : 'No'}\n`;
+        
+        if (rec.recommendedConfig.dynamicAllocation) {
+          output += `- **Executor Range:** ${rec.recommendedConfig.minExecutors}-${rec.recommendedConfig.maxExecutors}\n`;
+        }
+        
+        output += `\n### 📊 Conversion Notes\n`;
+        rec.notes.forEach((note: string) => {
+          output += `- ${note}\n`;
+        });
+        output += `\n`;
+      });
+
+      output += `\n💡 **Implementation:**\n`;
+      output += `1. Configure Spark pool settings in Fabric workspace settings\n`;
+      output += `2. Use recommended executor configurations for optimal performance\n`;
+      output += `3. Enable dynamic allocation if your Synapse pools used autoscale\n`;
+
+      return {
+        content: [{ type: 'text', text: output }]
+      };
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      return {
+        content: [{ type: 'text', text: `❌ Error creating Spark pool recommendations:\n${errorMsg}` }],
+        isError: true
+      };
+    }
+  }
+);
+
+server.tool(
+  "fabric_synapse_workspace_details",
+  SynapseWorkspaceDetailsSchema.shape,
+  {
+    title: "Get Synapse Workspace Details",
+    description: "Get comprehensive details of a Synapse workspace including resource information."
+  },
+  async (params: any) => {
+    try {
+      console.error(`📋 Getting Synapse workspace details for ${params.workspaceName}...`);
+      const result = await migrationTools.fabric_synapse_workspace_details.handler(params);
+
+      let output = `# 📋 Synapse Workspace Details\n\n`;
+      output += `**Workspace Name:** ${result.workspaceName}\n`;
+      output += `**Resource Group:** ${result.resourceGroup}\n`;
+      output += `**Subscription ID:** ${result.subscriptionId}\n\n`;
+      output += `## Resource Summary\n`;
+      output += `- **Notebooks:** ${result.notebooks.length}\n`;
+      output += `- **Pipelines:** ${result.pipelines.length}\n`;
+      output += `- **Spark Pools:** ${result.sparkPools.length}\n`;
+      output += `- **Linked Services:** ${result.linkedServices.length}\n`;
+
+      return {
+        content: [{ type: 'text', text: output }]
+      };
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      return {
+        content: [{ type: 'text', text: `❌ Error getting workspace details:\n${errorMsg}` }],
+        isError: true
+      };
+    }
+  }
+);
+
+server.tool(
+  "fabric_synapse_compute_spend",
+  SynapseComputeSpendSchema.shape,
+  {
+    title: "Get Synapse Compute Spend",
+    description: "Get compute spend data for a Synapse workspace to help with capacity sizing decisions."
+  },
+  async (params: any) => {
+    try {
+      console.error(`💰 Getting Synapse compute spend for ${params.workspaceName}...`);
+      const result = await migrationTools.fabric_synapse_compute_spend.handler(params);
+
+      let output = `# 💰 Synapse Compute Spend Analysis\n\n`;
+      output += `**Workspace:** ${result.workspaceName}\n`;
+      output += `**Period:** ${result.startDate || 'N/A'} to ${result.endDate || 'N/A'}\n`;
+      output += `**Total Spend:** $${result.totalSpendUSD}\n\n`;
+      output += `💡 Use this data with \`fabric_recommend_fabric_capacity\` to determine optimal Fabric capacity.\n`;
+
+      return {
+        content: [{ type: 'text', text: output }]
+      };
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      return {
+        content: [{ type: 'text', text: `❌ Error getting compute spend:\n${errorMsg}` }],
+        isError: true
+      };
+    }
+  }
+);
+
+server.tool(
+  "fabric_migrate_spark_pools_to_fabric",
+  MigrateSparkPoolsToFabricSchema.shape,
+  {
+    title: "Migrate Spark Pools to Fabric",
+    description: "Migrate Synapse Spark pools to equivalent Fabric configurations."
+  },
+  async (params: any) => {
+    try {
+      console.error(`🔄 Migrating Spark pools to Fabric...`);
+      const result = await migrationTools.fabric_migrate_spark_pools_to_fabric.handler(params);
+
+      let output = `# ✅ Spark Pool Migration Complete\n\n`;
+      output += `**Migrated Pools:** ${result.migrated}\n`;
+      output += `**Target Capacity:** ${result.targetCapacitySku}\n`;
+      output += `**Workspace ID:** ${result.workspaceId}\n`;
+
+      return {
+        content: [{ type: 'text', text: output }]
+      };
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      return {
+        content: [{ type: 'text', text: `❌ Error migrating Spark pools:\n${errorMsg}` }],
+        isError: true
+      };
+    }
+  }
+);
+
+server.tool(
+  "fabric_recommend_fabric_capacity",
+  RecommendFabricCapacitySchema.shape,
+  {
+    title: "Recommend Fabric Capacity",
+    description: "Recommend optimal Fabric capacity SKU based on Synapse compute usage patterns."
+  },
+  async (params: any) => {
+    try {
+      console.error(`🎯 Generating Fabric capacity recommendations...`);
+      const result = await migrationTools.fabric_recommend_fabric_capacity.handler(params);
+
+      let output = `# 🎯 Fabric Capacity Recommendation\n\n`;
+      output += `**Recommended SKU:** ${result.recommendedSku}\n`;
+      output += `**Reason:** ${result.reason}\n\n`;
+      output += `💡 This recommendation is based on your Synapse compute usage patterns.\n`;
+
+      return {
+        content: [{ type: 'text', text: output }]
+      };
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      return {
+        content: [{ type: 'text', text: `❌ Error generating capacity recommendation:\n${errorMsg}` }],
+        isError: true
+      };
+    }
   }
 );
 

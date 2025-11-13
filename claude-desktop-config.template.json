@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "fabric-analytics": {
+      "command": "node",
+      "args": [
+        "/absolute/path/to/Fabric-Analytics-MCP/build/index.js"
+      ],
+      "cwd": "/absolute/path/to/Fabric-Analytics-MCP",
+      "env": {
+        "NODE_ENV": "production",
+        "FABRIC_AUTH_METHOD": "azure-cli"
+      }
+    }
+  }
+}
