@@ -27,7 +27,7 @@ A comprehensive Model Context Protocol (MCP) server that provides analytics capa
 - [⚙️ Configuration](#️-configuration)
 - [🤝 Contributing](#-contributing)
 - [🔒 Security](#-security)
-- [📝 License](#-license)
+"Cancel the problematic Spark application"
 - [📞 Support](#-support)
 
 ## 🌟 **Key Features**
@@ -43,6 +43,11 @@ A comprehensive Model Context Protocol (MCP) server that provides analytics capa
 - **📈 Analytics & Insights** - Generate comprehensive monitoring dashboards with real-time metrics
 - **🧪 End-to-End Testing** - Complete test suite with real workspace creation and job execution
 - **🔄 Advanced Token Management** - Automatic token validation, refresh, and expiration handling
+"List all Fabric capacities I can use"
+"Assign workspace 1234abcd-abcd-1234-abcd-123456789000 to capacity f9998888-7777-6666-5555-444433332222"
+"Show all workspaces in capacity f9998888-7777-6666-5555-444433332222"
+"Unassign workspace 1234abcd-abcd-1234-abcd-123456789000 from its capacity"
+```
 - **☸️ Enterprise Deployment** - Full Kubernetes and Azure deployment support with auto-scaling
 - **🔄 Docker Support** - Containerized deployment with health checks and monitoring
 - **📊 Monitoring & Observability** - Built-in Prometheus metrics and Grafana dashboards
@@ -791,6 +796,105 @@ Once connected to Claude Desktop, you can ask natural language questions like:
 - "Generate a comprehensive Spark monitoring dashboard"
 - "Show me recent failed applications"
 - "Cancel the problematic Spark application"
+
+### **Capacity Management:**
+- "List all Fabric capacities I can use"
+- "Assign workspace 1234abcd-abcd-1234-abcd-123456789000 to capacity f9998888-7777-6666-5555-444433332222"
+- "Show all workspaces in capacity f9998888-7777-6666-5555-444433332222"
+- "Unassign workspace 1234abcd-abcd-1234-abcd-123456789000 from its capacity"
+
+## 🧩 **Capacity Management Tools**
+
+Manage Microsoft Fabric capacity assignments directly from your AI assistant. These tools let you inspect available capacities, attach/detach workspaces, and audit capacity usage.
+
+### Available Tools
+
+- `fabric_list_capacities` – Enumerate all capacities you can access (ID, SKU, region, state)
+- `fabric_assign_workspace_to_capacity` – Attach a workspace to a dedicated capacity
+- `fabric_unassign_workspace_from_capacity` – Return a workspace to shared capacity
+- `fabric_list_capacity_workspaces` – List all workspaces currently hosted on a given capacity
+
+### Notes
+
+- If authentication fails or you're in simulation mode, capacity responses are simulated.
+- Real capacity operations require appropriate Fabric / Power BI admin permissions.
+- You can provide a bearer token per call (`bearerToken` field) or rely on global auth.
+
+### Minimal Parameter Reference
+
+| Tool | Required Parameters | Optional |
+|------|---------------------|----------|
+| fabric_list_capacities | (none) | bearerToken |
+| fabric_assign_workspace_to_capacity | capacityId, workspaceId | bearerToken |
+| fabric_unassign_workspace_from_capacity | workspaceId | bearerToken |
+| fabric_list_capacity_workspaces | capacityId | bearerToken |
+
+## ❗ **Troubleshooting**
+
+### JSON Parse Errors (e.g., `Unexpected token 'P'`)
+
+If Claude Desktop or another MCP client reports an error like:
+
+```
+Error: Unexpected token 'P', "Please set"... is not valid JSON
+SyntaxError: Unexpected token 'P', "Please set"... is not valid JSON
+```
+
+**This is the EXACT issue reported in GitHub issue where the user saw "Unexpected token 'P', 'Please set'..." errors.**
+
+This almost always means something wrote plain text to STDOUT (which must contain ONLY JSON-RPC frames). Common causes:
+
+1. Added `console.log` debug statements in server code
+2. A dependency emitting warnings to STDOUT
+3. Early logging before transport initialization
+
+### Fixes Implemented in This Server
+
+- ✅ A startup guard now redirects `console.log` / `console.info` to STDERR automatically
+- ✅ Debug output has been consolidated behind the `DEBUG_MCP_RUN=1` flag
+- ✅ All diagnostic messages go to STDERR, keeping STDOUT clean for JSON-RPC protocol
+
+### What You Can Do
+
+- Avoid adding raw `console.log` statements—prefer `console.error` (goes to STDERR)
+- If you must allow stdout logging temporarily (NOT recommended), set:
+  - `ALLOW_UNSAFE_STDOUT=true`
+  - Remove after debugging
+- Regenerate the build (`npm run build`) after changes to ensure compiled output matches source
+
+### Capacity Tools Not Appearing?
+
+If the capacity tools don't show up when the client lists tools:
+
+1. Ensure you rebuilt after pulling changes: `npm run build`
+2. Confirm you're launching the server from `build/index.js` and not an older snapshot
+3. Verify no MCP client-side allowlist is filtering tool names
+4. Run a quick enumeration test: ask the assistant "List all available tools"
+5. If still missing, delete the `build/` folder and rebuild to clear stale artifacts
+
+### Authentication Edge Cases
+
+- Azure CLI auth may fail silently without an active `az login` session
+- Bearer tokens expire (~1 hour); refresh if operations suddenly fail
+- For local testing: falling back to simulation still lets you prototype tool flows
+
+### Getting Verbose Diagnostics
+
+Set the following (sent to STDERR, safe for MCP framing):
+
+```
+DEBUG_MCP_RUN=1
+```
+
+Optionally add structured auth tracing:
+
+```
+DEBUG_AUTH=1
+```
+
+---
+
+**Need a new troubleshooting topic?** Open an issue or PR so others benefit from the resolution.
 
 ### **🔐 Authentication**
 

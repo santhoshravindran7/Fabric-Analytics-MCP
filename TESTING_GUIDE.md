@@ -75,7 +75,7 @@ npm run test:azure-cli
 **Test Results Validation:**
 - Azure CLI installation check
 - Login status verification
-- Fabric token acquisition (`https://analysis.windows.net/powerbi/api`)
+- Fabric token acquisition (`https://api.fabric.microsoft.com`)
 - Power BI token acquisition (`https://api.powerbi.com`)
 
 ### Other Authentication Methods
@@ -288,7 +288,7 @@ taskkill /F /PID <process-id>
 - Service principal tokens have longer validity
 
 **Scope Issues:**
-- Fabric API: `https://analysis.windows.net/powerbi/api`
+- Fabric API: `https://api.fabric.microsoft.com`
 - Power BI API: `https://api.powerbi.com`
 
 ## 🎯 Best Practices for Testing

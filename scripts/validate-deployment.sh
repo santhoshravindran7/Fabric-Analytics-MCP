@@ -144,7 +144,7 @@ test_authentication() {
     local token_response
     if token_response=$(curl -s -X POST "https://login.microsoftonline.com/$FABRIC_TENANT_ID/oauth2/v2.0/token" \
         -H "Content-Type: application/x-www-form-urlencoded" \
-        -d "client_id=$FABRIC_CLIENT_ID&client_secret=$FABRIC_CLIENT_SECRET&scope=https://analysis.windows.net/powerbi/api/.default&grant_type=client_credentials"); then
+        -d "client_id=$FABRIC_CLIENT_ID&client_secret=$FABRIC_CLIENT_SECRET&scope=https://api.fabric.microsoft.com/.default&grant_type=client_credentials"); then
         
         if echo "$token_response" | jq -e '.access_token' > /dev/null 2>&1; then
             print_success "Authentication successful - obtained access token"

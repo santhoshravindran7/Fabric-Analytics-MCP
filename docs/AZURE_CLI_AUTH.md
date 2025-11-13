@@ -100,8 +100,8 @@ FABRIC_TENANT_ID=87654321-4321-4321-4321-210987654321
 
 1. **Token Acquisition**: Uses `az account get-access-token` to get valid tokens
 2. **Scope Management**: Automatically requests appropriate scopes:
-   - `https://api.fabric.microsoft.com/.default` (Microsoft Fabric)
-   - `https://analysis.windows.net/powerbi/api/.default` (Power BI)
+   - `https://api.fabric.microsoft.com/.default` (Microsoft Fabric - primary)
+   - `https://api.powerbi.com/.default` (Power BI)
 3. **Token Caching**: Caches tokens until expiration for better performance
 4. **Auto Refresh**: Automatically refreshes expired tokens
 
@@ -164,8 +164,8 @@ Your Azure account needs:
 
 ### **Token Scope**
 Azure CLI authentication uses these scopes:
-- `https://api.fabric.microsoft.com/.default`
-- `https://analysis.windows.net/powerbi/api/.default`
+- `https://api.fabric.microsoft.com/.default` (Primary Fabric API)
+- `https://api.powerbi.com/.default` (Power BI API when needed)
 
 ### **Best Practices**
 - Use least-privilege accounts for testing

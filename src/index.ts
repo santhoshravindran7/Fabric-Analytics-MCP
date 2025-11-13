@@ -9,6 +9,40 @@ import { MicrosoftAuthClient, AuthMethod, AuthResult } from './auth-client.js';
 import http from 'http';
 import url from 'url';
 /**
+ * STDOUT SAFETY GUARD
+ * -------------------------------------------------------------
+ * MCP clients (Claude Desktop, Copilot, etc.) expect ONLY valid
+ * JSON-RPC framed messages on STDOUT. Any stray console.log()
+ * output will cause JSON parse errors like:
+ *   "Unexpected token 'P' ..." or "Unexpected token '{' ..."
+ * We proactively redirect console.log/info to STDERR unless
+ * explicitly overridden via ALLOW_UNSAFE_STDOUT=true. This keeps
+ * protocol framing clean while still allowing debug visibility.
+ *
+ * Set DEBUG_MCP_RUN=1 to enable additional structured diagnostics
+ * already emitted on STDERR elsewhere in this file.
+ */
+(() => {
+  if (process.env.ALLOW_UNSAFE_STDOUT === 'true') {
+    return; // Power user override for controlled environments
+  }
+  const redirect = (...args: any[]) => {
+    try {
+      const msg = args.map(a => {
+        if (typeof a === 'string') return a;
+        try { return JSON.stringify(a); } catch { return String(a); }
+      }).join(' ');
+      // Use stderr so MCP JSON-RPC stream on stdout remains pristine
+      process.stderr.write(`[LOG] ${msg}\n`);
+    } catch (e) {
+      // Final fallback – never throw from logging shim
+      process.stderr.write('[LOG] <unserializable log message>\n');
+    }
+  };
+  console.log = redirect as any;
+  console.info = redirect as any;
+})();
+/**
  * 
  * This a is a safe date formatter that handles various edge cases:
  * 
@@ -1242,6 +1276,102 @@ Troubleshooting steps:
     return SimulationService.simulateApiCall(operation, simulationParams);
   }
 }
+
+// Register capacity management tools inline (direct registration for build reliability)
+server.tool(
+  "fabric_list_capacities",
+  "List all available Fabric capacities",
+  ListCapacitiesSchema.shape,
+  async ({ bearerToken }) => {
+    const result = await executeApiCall(
+      bearerToken,
+      authConfig.defaultWorkspaceId || "global",
+      "list-capacities",
+      async (client) => await client.listCapacities(),
+      {}
+    );
+    if (result.status === 'error') {
+      return { content: [{ type: 'text', text: `Error listing capacities: ${result.error}` }] };
+    }
+    const capacities: any[] = Array.isArray(result.data) ? result.data : [];
+    if (capacities.length === 0) {
+      return { content: [{ type: 'text', text: 'No capacities found in your tenant.' }] };
+    }
+    const list = capacities.map((c: any, i: number) => `${i + 1}. ${c.displayName} (${c.sku})\n   ID: ${c.id}\n   State: ${c.state}\n   Region: ${c.region}`).join('\n\n');
+    return {
+      content: [{ type: 'text', text: `🏗️ Found ${capacities.length} Fabric Capacities:\n\n${list}\n\nUse a capacity ID in other operations (assignment, listing workspaces).` }]
+    };
+  }
+);
+
+server.tool(
+  "fabric_assign_workspace_to_capacity",
+  "Assign a workspace to a dedicated Fabric capacity",
+  AssignWorkspaceToCapacitySchema.shape,
+  async ({ bearerToken, capacityId, workspaceId }) => {
+    const result = await executeApiCall(
+      bearerToken,
+      authConfig.defaultWorkspaceId || "global",
+      "assign-workspace-to-capacity",
+      async (client) => await client.assignWorkspaceToCapacity(capacityId, workspaceId),
+      { capacityId, workspaceId }
+    );
+    if (result.status === 'error') {
+      return { content: [{ type: 'text', text: `Error assigning workspace to capacity: ${result.error}` }] };
+    }
+    return {
+      content: [{ type: 'text', text: `✅ Workspace ${workspaceId} assigned to capacity ${capacityId}.` }]
+    };
+  }
+);
+
+server.tool(
+  "fabric_unassign_workspace_from_capacity",
+  "Unassign a workspace from its capacity (move to shared capacity)",
+  UnassignWorkspaceFromCapacitySchema.shape,
+  async ({ bearerToken, workspaceId }) => {
+    const result = await executeApiCall(
+      bearerToken,
+      authConfig.defaultWorkspaceId || "global",
+      "unassign-workspace-from-capacity",
+      async (client) => await client.unassignWorkspaceFromCapacity(workspaceId),
+      { workspaceId }
+    );
+    if (result.status === 'error') {
+      return { content: [{ type: 'text', text: `Error unassigning workspace from capacity: ${result.error}` }] };
+    }
+    return {
+      content: [{ type: 'text', text: `✅ Workspace ${workspaceId} moved to shared capacity.` }]
+    };
+  }
+);
+
+server.tool(
+  "fabric_list_capacity_workspaces",
+  "List all workspaces assigned to a specific capacity",
+  ListCapacityWorkspacesSchema.shape,
+  async ({ bearerToken, capacityId }) => {
+    const result = await executeApiCall(
+      bearerToken,
+      authConfig.defaultWorkspaceId || "global",
+      "list-capacity-workspaces",
+      async (client) => await client.listCapacityWorkspaces(capacityId),
+      { capacityId }
+    );
+    if (result.status === 'error') {
+      return { content: [{ type: 'text', text: `Error listing capacity workspaces: ${result.error}` }] };
+    }
+    const workspaces: any[] = Array.isArray(result.data) ? result.data : [];
+    if (workspaces.length === 0) {
+      return { content: [{ type: 'text', text: `No workspaces found in capacity ${capacityId}.` }] };
+    }
+    const list = workspaces.map((w: any, i: number) => `${i + 1}. ${w.name} (${w.type})\n   ID: ${w.id}\n   State: ${w.state}`).join('\n\n');
+    return {
+      content: [{ type: 'text', text: `🏗️ Workspaces in Capacity ${capacityId} (${workspaces.length}):\n\n${list}` }]
+    };
+  }
+);
+
 // dataflows monitoring tools
 
 // ====================================
@@ -3518,155 +3648,7 @@ server.tool(
   }
 );
 
-// ==================== CAPACITY MANAGEMENT TOOLS ====================
-
-server.tool(
-  "fabric_list_capacities",
-  "List all available Fabric capacities",
-  ListCapacitiesSchema.shape,
-  async ({ bearerToken }) => {
-    const result = await executeApiCall(
-      bearerToken,
-      authConfig.defaultWorkspaceId || "global",
-      "list-capacities",
-      (client) => client.listCapacities(),
-      {}
-    );
-
-    if (result.status === 'error') {
-      return {
-        content: [{ type: "text", text: `Error listing capacities: ${result.error}` }]
-      };
-    }
-
-    const capacities = result.data || [];
-    if (capacities.length === 0) {
-      return {
-        content: [{ type: "text", text: "No capacities found in your tenant." }]
-      };
-    }
-
-    const capacitiesList = capacities.map((capacity: any, index: number) => 
-      `${index + 1}. ${capacity.displayName} (${capacity.sku})\n   ID: ${capacity.id}\n   State: ${capacity.state}\n   Region: ${capacity.region}`
-    ).join('\n\n');
-
-    return {
-      content: [{ 
-        type: "text", 
-        text: `🏗️ **Found ${capacities.length} Fabric Capacit${capacities.length === 1 ? 'y' : 'ies'}:**\n\n${capacitiesList}\n\n💡 Use these capacity IDs to assign workspaces or list capacity workspaces.`
-      }]
-    };
-  }
-);
-
-server.tool(
-  "fabric_assign_workspace_to_capacity",
-  "Assign a workspace to a dedicated Fabric capacity",
-  AssignWorkspaceToCapacitySchema.shape,
-  async ({ bearerToken, capacityId, workspaceId }) => {
-    const result = await executeApiCall(
-      bearerToken,
-      authConfig.defaultWorkspaceId || "global",
-      "assign-workspace-to-capacity",
-      (client) => client.assignWorkspaceToCapacity(capacityId, workspaceId),
-      { capacityId, workspaceId }
-    );
-
-    if (result.status === 'error') {
-      return {
-        content: [{ type: "text", text: `Error assigning workspace to capacity: ${result.error}` }]
-      };
-    }
-
-    return {
-      content: [{ 
-        type: "text", 
-        text: `✅ **Workspace Assignment Successful!**\n\n📋 Details:\n• Workspace ID: ${workspaceId}\n• Capacity ID: ${capacityId}\n• Status: Successfully assigned\n• Assigned at: ${result.data?.assignedAt || 'Now'}\n\n💡 The workspace is now running on dedicated capacity resources.`
-      }]
-    };
-  }
-);
-
-server.tool(
-  "fabric_unassign_workspace_from_capacity",
-  "Unassign a workspace from its capacity (move to shared capacity)",
-  UnassignWorkspaceFromCapacitySchema.shape,
-  async ({ bearerToken, workspaceId }) => {
-    const result = await executeApiCall(
-      bearerToken,
-      authConfig.defaultWorkspaceId || "global",
-      "unassign-workspace-from-capacity",
-      (client) => client.unassignWorkspaceFromCapacity(workspaceId),
-      { workspaceId }
-    );
-
-    if (result.status === 'error') {
-      return {
-        content: [{ type: "text", text: `Error unassigning workspace from capacity: ${result.error}` }]
-      };
-    }
-
-    return {
-      content: [{ 
-        type: "text", 
-        text: `✅ **Workspace Unassignment Successful!**\n\n📋 Details:\n• Workspace ID: ${workspaceId}\n• Status: Moved to shared capacity\n• Unassigned at: ${result.data?.unassignedAt || 'Now'}\n\n💡 The workspace is now running on shared capacity resources.`
-      }]
-    };
-  }
-);
-
-server.tool(
-  "fabric_list_capacity_workspaces",
-  "List all workspaces assigned to a specific capacity",
-  ListCapacityWorkspacesSchema.shape,
-  async ({ bearerToken, capacityId }) => {
-    const result = await executeApiCall(
-      bearerToken,
-      authConfig.defaultWorkspaceId || "global",
-      "list-capacity-workspaces",
-      (client) => client.listCapacityWorkspaces(capacityId),
-      { capacityId }
-    );
-
-    if (result.status === 'error') {
-      return {
-        content: [{ type: "text", text: `Error listing capacity workspaces: ${result.error}` }]
-      };
-    }
-
-    const workspaces = result.data || [];
-    if (workspaces.length === 0) {
-      return {
-        content: [{ type: "text", text: `No workspaces found in capacity ${capacityId}.` }]
-      };
-    }
-
-    const workspacesList = workspaces.map((workspace: any, index: number) => 
-      `${index + 1}. ${workspace.name} (${workspace.type})\n   ID: ${workspace.id}\n   State: ${workspace.state}`
-    ).join('\n\n');
-
-    return {
-      content: [{ 
-        type: "text", 
-        text: `🏗️ **Found ${workspaces.length} Workspace${workspaces.length === 1 ? '' : 's'} in Capacity ${capacityId}:**\n\n${workspacesList}\n\n💡 These workspaces are running on dedicated capacity resources.`
-      }]
-    };
-  }
-);
-
-server.tool(
-  "test-function",
-  "Test function to verify registration",
-  z.object({}).shape,
-  async () => {
-    return {
-      content: [{
-        type: "text",
-        text: "Test function works!"
-      }]
-    };
-  }
-);
+// ==================== HEALTH CHECK SERVER ====================
 
 /**
  * Health check endpoint for Docker/Kubernetes deployments
@@ -4863,15 +4845,18 @@ server.tool(
         }
 
         const runData = await runResponse.json();
-// 🔍 ADD THIS DEBUG CODE:
-console.log("=== RAW API RESPONSE DEBUG ===");
-console.log("Full runData object:", JSON.stringify(runData, null, 2));
-console.log("=== DATE FIELDS ANALYSIS ===");
-console.log("startTime:", typeof runData.startTime, "=", runData.startTime);
-console.log("endTime:", typeof runData.endTime, "=", runData.endTime);
-console.log("createdDateTime:", typeof runData.createdDateTime, "=", runData.createdDateTime);
-console.log("lastUpdatedTime:", typeof runData.lastUpdatedTime, "=", runData.lastUpdatedTime);
-console.log("================================");
+// Removed noisy debug stdout (would break MCP JSON framing). For troubleshooting, enable DEBUG_MCP_RUN=1.
+if (process.env.DEBUG_MCP_RUN === '1') {
+  const dbg = (...args: unknown[]) => console.error('[debug run-data]', ...args);
+  dbg('=== RAW API RESPONSE DEBUG ===');
+  dbg('Full runData object:', JSON.stringify(runData, null, 2));
+  dbg('=== DATE FIELDS ANALYSIS ===');
+  dbg('startTime:', typeof runData.startTime, '=', runData.startTime);
+  dbg('endTime:', typeof runData.endTime, '=', runData.endTime);
+  dbg('createdDateTime:', typeof runData.createdDateTime, '=', runData.createdDateTime);
+  dbg('lastUpdatedTime:', typeof runData.lastUpdatedTime, '=', runData.lastUpdatedTime);
+  dbg('================================');
+}
          // Get subactivities if requested
         let subactivities: FabricSubactivity[] = [];
         if (includeSubactivities) {
@@ -5524,6 +5509,7 @@ The tools integrate seamlessly with your existing authentication and error handl
 */
 
 async function main() {
+  // Capacity tools now registered early (line ~1295) - no late fallback needed
   // Start health server for Docker/Kubernetes deployments
   const port = process.env.PORT ? parseInt(process.env.PORT) : 3000;
   const enableHealthServer = process.env.ENABLE_HEALTH_SERVER === 'true'; // Default to false for MCP mode
