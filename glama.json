@@ -1,0 +1,241 @@
+{
+  "name": "fabric-analytics-mcp",
+  "displayName": "Microsoft Fabric Analytics MCP Server",
+  "version": "2.0.1",
+  "description": "A comprehensive Model Context Protocol (MCP) server providing 41+ analytics tools for Microsoft Fabric data platform. Enables AI assistants to access, analyze, monitor, and manage Fabric resources including workspaces, notebooks, Spark jobs, and real-time performance monitoring.",
+  "author": {
+    "name": "Santhosh Ravindran",
+    "email": "santhoshravindran7@gmail.com",
+    "url": "https://github.com/santhoshravindran7"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/santhoshravindran7/Fabric-Analytics-MCP",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/santhoshravindran7/Fabric-Analytics-MCP.git"
+  },
+  "bugs": {
+    "url": "https://github.com/santhoshravindran7/Fabric-Analytics-MCP/issues"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "microsoft-fabric",
+    "analytics",
+    "data-analysis",
+    "azure",
+    "spark",
+    "livy",
+    "notebooks",
+    "powerbi",
+    "data-science",
+    "workspace-management",
+    "monitoring",
+    "ai-assistant",
+    "claude",
+    "github-copilot"
+  ],
+  "category": "data-analytics",
+  "tags": [
+    "Microsoft Fabric",
+    "Azure",
+    "Data Analytics",
+    "Spark",
+    "Notebooks",
+    "Monitoring",
+    "Workspace Management"
+  ],
+  "mcpVersion": "0.1.0",
+  "capabilities": {
+    "tools": 41,
+    "resources": false,
+    "prompts": false
+  },
+  "features": [
+    "Complete workspace management (create, delete, find, assign capacity)",
+    "Enhanced CRUD operations for all Fabric items",
+    "Advanced notebook management with 5 predefined templates",
+    "Full Livy API integration for Spark sessions and batch jobs",
+    "Real-time Spark monitoring across workspaces and applications",
+    "Multiple authentication methods (Bearer, Service Principal, Azure CLI)",
+    "Automatic token management and validation",
+    "Comprehensive analytics and performance insights",
+    "Cross-platform support (Windows, macOS, Linux)",
+    "Enterprise-ready with Kubernetes deployment"
+  ],
+  "requirements": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "installation": {
+    "npm": "npm install -g mcp-for-microsoft-fabric-analytics",
+    "pip": "pip install fabric-analytics-mcp"
+  },
+  "usage": {
+    "command": "node",
+    "args": ["path/to/build/index.js"]
+  },
+  "configuration": {
+    "env": {
+      "FABRIC_AUTH_METHOD": {
+        "description": "Authentication method (bearer_token, service_principal, azure_cli, interactive, device_code)",
+        "required": true,
+        "default": "azure_cli"
+      },
+      "FABRIC_CLIENT_ID": {
+        "description": "Azure AD application client ID",
+        "required": false
+      },
+      "FABRIC_CLIENT_SECRET": {
+        "description": "Azure AD application client secret",
+        "required": false
+      },
+      "FABRIC_TENANT_ID": {
+        "description": "Azure AD tenant ID",
+        "required": false
+      },
+      "FABRIC_DEFAULT_WORKSPACE_ID": {
+        "description": "Default Fabric workspace ID",
+        "required": false
+      },
+      "ENABLE_AZURE_OPENAI_ANALYSIS": {
+        "description": "Enable Azure OpenAI-powered performance analysis",
+        "required": false,
+        "default": "false"
+      }
+    }
+  },
+  "toolCategories": [
+    {
+      "name": "Workspace Management",
+      "count": 5,
+      "tools": [
+        "fabric_list_workspaces",
+        "fabric_find_workspace",
+        "fabric_create_workspace",
+        "fabric_assign_workspace_to_capacity",
+        "fabric_unassign_workspace_from_capacity"
+      ]
+    },
+    {
+      "name": "Item Management",
+      "count": 8,
+      "tools": [
+        "list-fabric-items",
+        "create-fabric-item",
+        "get-fabric-item-definition",
+        "update-fabric-item",
+        "delete-fabric-item",
+        "list-fabric-item-runs",
+        "get-fabric-item-run",
+        "list-fabric-run-subactivities"
+      ]
+    },
+    {
+      "name": "Notebook Operations",
+      "count": 5,
+      "tools": [
+        "create-fabric-notebook",
+        "execute-fabric-notebook",
+        "get-fabric-notebook-definition",
+        "update-fabric-notebook-definition",
+        "delete-fabric-notebook"
+      ]
+    },
+    {
+      "name": "Spark Integration",
+      "count": 10,
+      "tools": [
+        "submit-spark-job",
+        "create-livy-batch",
+        "create-livy-session",
+        "delete-livy-session",
+        "execute-livy-statement",
+        "get-livy-session-status",
+        "get-livy-statement-result",
+        "analyze-livy-session-logs",
+        "cancel-spark-application",
+        "get-notebook-spark-application-details"
+      ]
+    },
+    {
+      "name": "Monitoring & Analytics",
+      "count": 7,
+      "tools": [
+        "get-spark-monitoring-dashboard",
+        "monitor-fabric-runs-dashboard",
+        "analyze-fabric-run-performance",
+        "get-workspace-spark-applications",
+        "check-fabric-auth-status",
+        "list-monitoring-sessions",
+        "stop-monitoring-session"
+      ]
+    },
+    {
+      "name": "Capacity Management",
+      "count": 3,
+      "tools": [
+        "fabric_list_capacities",
+        "fabric_list_capacity_workspaces",
+        "fabric_get_capacity_state"
+      ]
+    },
+    {
+      "name": "Lakehouse Operations",
+      "count": 3,
+      "tools": [
+        "fabric_create_lakehouse",
+        "fabric_list_lakehouses",
+        "fabric_get_lakehouse_tables"
+      ]
+    }
+  ],
+  "compatibility": {
+    "claude": true,
+    "copilot": true,
+    "continue": true,
+    "cursor": true,
+    "openai": true
+  },
+  "documentation": {
+    "readme": "https://github.com/santhoshravindran7/Fabric-Analytics-MCP/blob/master/README.md",
+    "examples": "https://github.com/santhoshravindran7/Fabric-Analytics-MCP/blob/master/EXAMPLES.md",
+    "api": "https://github.com/santhoshravindran7/Fabric-Analytics-MCP/blob/master/docs/",
+    "troubleshooting": "https://github.com/santhoshravindran7/Fabric-Analytics-MCP/blob/master/TROUBLESHOOTING.md"
+  },
+  "screenshots": [
+    "https://raw.githubusercontent.com/santhoshravindran7/Fabric-Analytics-MCP/master/docs/images/dashboard.png",
+    "https://raw.githubusercontent.com/santhoshravindran7/Fabric-Analytics-MCP/master/docs/images/monitoring.png"
+  ],
+  "videoDemo": "https://github.com/santhoshravindran7/Fabric-Analytics-MCP#demo",
+  "support": {
+    "issues": "https://github.com/santhoshravindran7/Fabric-Analytics-MCP/issues",
+    "discussions": "https://github.com/santhoshravindran7/Fabric-Analytics-MCP/discussions",
+    "email": "santhoshravindran7@gmail.com"
+  },
+  "badges": [
+    {
+      "label": "License",
+      "message": "MIT",
+      "color": "yellow"
+    },
+    {
+      "label": "Tools",
+      "message": "41+",
+      "color": "brightgreen"
+    },
+    {
+      "label": "MCP",
+      "message": "Compatible",
+      "color": "purple"
+    },
+    {
+      "label": "Status",
+      "message": "Production Ready",
+      "color": "success"
+    }
+  ],
+  "changelog": "https://github.com/santhoshravindran7/Fabric-Analytics-MCP/releases",
+  "publishedAt": "2025-12-19T00:00:00Z",
+  "updatedAt": "2025-12-19T00:00:00Z"
+}

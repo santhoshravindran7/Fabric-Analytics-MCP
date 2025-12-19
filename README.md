@@ -2,6 +2,10 @@
 
 # Microsoft Fabric Analytics MCP Server
 
+<a href="https://glama.ai/mcp/servers/@santhoshravindran7/Fabric-Analytics-MCP">
+  <img width="380" height="200" src="https://glama.ai/mcp/servers/@santhoshravindran7/Fabric-Analytics-MCP/badge" alt="Fabric Analytics MCP server" />
+</a>
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![PyPI version](https://badge.fury.io/py/fabric-analytics-mcp.svg)](https://badge.fury.io/py/fabric-analytics-mcp)
 [![npm version](https://badge.fury.io/js/mcp-for-microsoft-fabric-analytics.svg)](https://badge.fury.io/js/mcp-for-microsoft-fabric-analytics)
