@@ -1,0 +1,102 @@
+# Node modules
+node_modules/
+npm-debug.log
+yarn-error.log
+pnpm-debug.log*
+
+# Build outputs
+build/
+dist/
+*.tsbuildinfo
+
+# Development files
+.git/
+.gitignore
+.github/
+.vscode/
+.idea/
+
+# Test files
+__tests__/
+*.test.ts
+*.test.js
+*.spec.ts
+*.spec.js
+test-*.js
+test-*.mjs
+test-*.cjs
+coverage/
+.nyc_output/
+
+# Documentation
+docs/
+*.md
+!README.md
+EXAMPLES.md
+CONTRIBUTING.md
+LICENSE
+
+# Python wrapper (not needed in Node.js container)
+python-wrapper/
+
+# Configuration files
+.env
+.env.*
+*.local
+.DS_Store
+Thumbs.db
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+azure-pipelines.yml
+.travis.yml
+
+# IDE
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+.vscode/
+.idea/
+
+# Logs
+logs/
+*.log
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Docker files (no need to copy into image)
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Kubernetes
+k8s/
+kubernetes/
+*.yaml
+*.yml
+!package.json
+
+# Test scripts
+*test*.mjs
+*test*.cjs
+*test*.js
+debug-*.js
+debug-*.mjs
+debug-*.cjs
+validate-*.js
+check-*.mjs
+assign-*.mjs
+find-*.mjs
+
+# Other
+*.sql
+*.db
+*.sqlite
+.husky/

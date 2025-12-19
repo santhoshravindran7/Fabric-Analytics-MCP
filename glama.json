@@ -67,6 +67,17 @@
     "node": ">=18.0.0",
     "npm": ">=9.0.0"
   },
+  "docker": {
+    "file": "Dockerfile",
+    "buildArgs": {
+      "NODE_OPTIONS": "--max-old-space-size=4096"
+    }
+  },
+  "build": {
+    "command": "pnpm",
+    "args": ["run", "build"],
+    "nodeOptions": "--max-old-space-size=4096"
+  },
   "installation": {
     "npm": "npm install -g mcp-for-microsoft-fabric-analytics",
     "pip": "pip install fabric-analytics-mcp"
