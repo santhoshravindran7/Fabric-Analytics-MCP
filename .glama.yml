@@ -2,11 +2,10 @@
 name: fabric-analytics-mcp
 version: 2.0.1
 
-# Build configuration
+# Build configuration - pre-built, only install dependencies
 build:
   steps:
-    - pnpm install --frozen-lockfile
-    - pnpm run build
+    - pnpm install --prod --frozen-lockfile
   
   # Node.js environment configuration
   node:
