@@ -1,0 +1,37 @@
+# Glama.ai MCP Server Configuration
+name: fabric-analytics-mcp
+version: 2.0.1
+
+# Build configuration
+build:
+  steps:
+    - pnpm install --frozen-lockfile
+    - pnpm run build
+  
+  # Node.js environment configuration
+  node:
+    version: "20"
+    options:
+      maxOldSpaceSize: 4096  # 4GB heap for TypeScript compilation
+  
+  # Environment variables for build
+  env:
+    NODE_ENV: production
+    NODE_OPTIONS: "--max-old-space-size=4096"
+
+# Runtime configuration
+runtime:
+  command: node
+  args:
+    - build/index.js
+  
+  # MCP server configuration
+  mcp:
+    inspector: true
+    stdio: true
+
+# Docker build hints (if Glama uses custom Dockerfile)
+docker:
+  baseImage: "node:20-slim"
+  buildArgs:
+    NODE_OPTIONS: "--max-old-space-size=4096"

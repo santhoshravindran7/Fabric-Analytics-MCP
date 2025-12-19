@@ -1,6 +1,6 @@
 {
   "name": "mcp-for-microsoft-fabric-analytics",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "MCP server for Microsoft Fabric Analytics with Synapse-to-Fabric migration - enables LLMs to access, analyze, and migrate workloads to Microsoft Fabric",
   "type": "module",
   "main": "./build/index.js",
@@ -9,7 +9,7 @@
     "fabric-analytics-mcp": "./build/index.js"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "NODE_OPTIONS='--max-old-space-size=4096' tsc",
     "dev": "tsc --watch",
     "start": "node build/index.js",
     "test": "jest --forceExit",
