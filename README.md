@@ -1,10 +1,10 @@
-[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/santhoshravindran7-fabric-analytics-mcp-badge.png)](https://mseep.ai/app/santhoshravindran7-fabric-analytics-mcp)
-
-# Microsoft Fabric Analytics MCP Server
-
 <a href="https://glama.ai/mcp/servers/@santhoshravindran7/Fabric-Analytics-MCP">
   <img width="380" height="200" src="https://glama.ai/mcp/servers/@santhoshravindran7/Fabric-Analytics-MCP/badge" alt="Fabric Analytics MCP server" />
 </a>
+
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/santhoshravindran7-fabric-analytics-mcp-badge.png)](https://mseep.ai/app/santhoshravindran7-fabric-analytics-mcp)
+
+# Microsoft Fabric Analytics MCP Server
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![PyPI version](https://badge.fury.io/py/fabric-analytics-mcp.svg)](https://badge.fury.io/py/fabric-analytics-mcp)
