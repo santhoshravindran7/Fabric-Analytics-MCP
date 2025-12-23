@@ -182,6 +182,8 @@ The MCP server now includes **4 specialized migration tools** that automate the 
 
 ### **🎯 Migration Scenarios**
 
+![Migration Demo](docs/images/migration-demo.gif)
+
 **📋 Explore Before Migrating:**
 ```
 "List all my Synapse workspaces and show me what notebooks are in workspace 'analytics-synapse'"
